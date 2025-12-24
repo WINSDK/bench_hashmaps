@@ -21,11 +21,21 @@ std::vector<BenchResult> benchmark_boost_improve(
         const auto lookup_count = lookups.size();
         const auto batch_size = lookup_count / iterations;
 
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
-                const auto it = map.find(key);
-                return it->second;
-            });
+        auto sum = 0ULL;
+        auto offset = 0ULL;
+        auto iters = std::vector<decltype(map.begin())>(batch_size);
+
+        const auto start = RECORDER.get_counters();
+        for (size_t iter = 0; iter < iterations; iter++) {
+            const auto* batch = &lookups[offset];
+            offset += batch_size;
+            map.findMany(batch, batch + batch_size, iters.begin());
+            for (size_t i = 0; i < batch_size; i++) {
+                sum += iters[i]->second;
+            }
+        }
+        const auto end = RECORDER.get_counters();
+        auto counter = end - start;
 
         auto per_lookup = static_cast<double>(counter.cycles) / static_cast<double>(lookup_count);
         results.emplace_back(per_lookup, sum);

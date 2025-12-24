@@ -8919,6 +8919,42 @@ public:
     return const_cast<table*>(this)->find(x);
   }
 
+  template<typename Key>
+  BOOST_FORCEINLINE void prefetch(const Key& x)const
+  {
+    auto hash=this->hash_for(x);
+    auto pos0=this->position_for(hash);
+    auto pg=this->arrays.groups()+pos0;
+    BOOST_UNORDERED_PREFETCH(pg);
+    auto elements=this->arrays.elements();
+    BOOST_UNORDERED_ASSUME(elements!=nullptr);
+    BOOST_UNORDERED_PREFETCH_ELEMENTS(elements+pos0*N,N);
+  }
+
+  template<typename InputIterator,typename OutputIterator>
+  BOOST_FORCEINLINE void findMany(
+    InputIterator first,InputIterator last,OutputIterator out)
+  {
+    for(auto it=first;it!=last;++it){
+      prefetch(*it);
+    }
+    for(auto it=first;it!=last;++it){
+      *out++=find(*it);
+    }
+  }
+
+  template<typename InputIterator,typename OutputIterator>
+  BOOST_FORCEINLINE void findMany(
+    InputIterator first,InputIterator last,OutputIterator out)const
+  {
+    for(auto it=first;it!=last;++it){
+      prefetch(*it);
+    }
+    for(auto it=first;it!=last;++it){
+      *out++=find(*it);
+    }
+  }
+
   using super::capacity;
   using super::load_factor;
   using super::max_load_factor;
@@ -11274,6 +11310,20 @@ namespace boost {
         return table_.find(key);
       }
 
+      template <class InputIterator, class OutputIterator>
+      BOOST_FORCEINLINE void findMany(
+        InputIterator first, InputIterator last, OutputIterator out)
+      {
+        table_.findMany(first, last, out);
+      }
+
+      template <class InputIterator, class OutputIterator>
+      BOOST_FORCEINLINE void findMany(
+        InputIterator first, InputIterator last, OutputIterator out) const
+      {
+        table_.findMany(first, last, out);
+      }
+
       BOOST_FORCEINLINE bool contains(key_type const& key) const
       {
         return this->find(key) != this->end();
@@ -12280,6 +12330,20 @@ namespace boost {
       find(K const& key) const
       {
         return table_.find(key);
+      }
+
+      template <class InputIterator, class OutputIterator>
+      BOOST_FORCEINLINE void findMany(
+        InputIterator first, InputIterator last, OutputIterator out)
+      {
+        table_.findMany(first, last, out);
+      }
+
+      template <class InputIterator, class OutputIterator>
+      BOOST_FORCEINLINE void findMany(
+        InputIterator first, InputIterator last, OutputIterator out) const
+      {
+        table_.findMany(first, last, out);
       }
 
       BOOST_FORCEINLINE bool contains(key_type const& key) const

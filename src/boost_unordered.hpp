@@ -4272,6 +4272,8 @@ namespace detail
 
 #ifndef  BOOST_USE_WINDOWS_H 
 
+#if defined( _WIN32 ) || defined( __WIN32__ ) || defined( __CYGWIN__ )
+
 #if defined(__clang__) && defined(__x86_64__)
 // clang x64 warns that __stdcall is ignored
 # define BOOST_CORE_SP_STDCALL
@@ -4288,6 +4290,8 @@ namespace detail
 extern "C" __declspec(dllimport) int BOOST_CORE_SP_STDCALL SwitchToThread();
 
 #undef BOOST_CORE_SP_STDCALL
+
+#endif // defined( _WIN32 ) || defined( __WIN32__ ) || defined( __CYGWIN__ )
 
 #endif // !defined( BOOST_USE_WINDOWS_H )
 

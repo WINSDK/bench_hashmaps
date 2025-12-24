@@ -7,25 +7,35 @@ project(hash LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+include(FetchContent)
+FetchContent_Declare(
+    abseil-cpp
+    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+    GIT_TAG lts_2025_08_14
+)
+FetchContent_MakeAvailable(abseil-cpp)
+
 add_executable(hash
     src/main.cpp
     src/base.hpp
     src/bench_common.hpp
-    src/bench_baseline.hpp
-    src/bench_baseline.cpp
-    src/bench_improve.hpp
-    src/bench_improve.cpp
+    src/bench_absl.hpp
+    src/bench_absl.cpp
+    src/bench_boost.hpp
+    src/bench_boost.cpp
+    src/bench_std.hpp
+    src/bench_std.cpp
     src/bench_twoway.hpp
     src/bench_twoway.cpp
     src/TwoWay.hpp
-    src/boost_unordered_improve.hpp
-    src/boost_unordered_baseline.hpp
+    src/boost_unordered.hpp
     src/measure.cpp
     src/measure.hpp
 )
 
 target_compile_features(hash PRIVATE cxx_std_23)
 target_compile_options(hash PRIVATE -fcolor-diagnostics -fdeclspec)
+target_link_libraries(hash PRIVATE absl::flat_hash_map)
 
 option(HASH_BUILD_TESTS "Build Two_Way tests" ON)
 if(HASH_BUILD_TESTS)

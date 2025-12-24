@@ -1,20 +1,21 @@
-#include "bench_baseline.hpp"
-#include "boost_unordered_improve.hpp"
+#include "bench_absl.hpp"
+
+#include <absl/container/flat_hash_map.h>
 
 #include <span>
 #include <vector>
 
-std::vector<BenchResult> benchmark_boost_baseline(
+std::vector<BenchResult> benchmark_absl_flat_hash_map(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
     size_t iterations) {
-    boost::unordered::unordered_flat_map<uint64_t, uint64_t> map{};
+    absl::flat_hash_map<uint64_t, uint64_t> map{};
     map.reserve(keys.size() * 2);
     for (const auto key : keys) {
         map.emplace(key, key);
     }
 
-    std::vector<BenchResult> results{};
+    auto results = std::vector<BenchResult>{};
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {

@@ -7,20 +7,9 @@
 #include <span>
 #include <vector>
 
-#include "TwoWay.hpp"
-#include "base.hpp"
-#include "bench.hpp"
-#include "boost_baseline.hpp"
-#include "boost_improve.hpp"
-
-struct U64ToU64TableTrait {
-    using Key = uint64_t;
-    using Value = uint64_t;
-
-    static uint64_t hash(Key key) {
-        return squirrel3(key);
-    }
-};
+#include "bench_baseline.hpp"
+#include "bench_improve.hpp"
+#include "bench_twoway.hpp"
 
 constexpr auto ITERS = 100'000ULL;
 constexpr std::array<size_t, 8> BATCH_SIZE{1, 2, 4, 8, 16, 32, 64, 128};
@@ -56,11 +45,7 @@ int main() {
 
         const auto baseline_results = benchmark_boost_baseline(keys, lookup_sets, ITERS);
         const auto improve_results = benchmark_boost_improve(keys, lookup_sets, ITERS);
-
-        TwoWay<U64ToU64TableTrait, 4> twoway{};
-        for (const auto key : keys) {
-            twoway.insert(key, key);
-        }
+        const auto twoway_results = benchmark_twoway(keys, lookup_sets, ITERS);
 
         auto baseline_sum = 0ULL;
         auto twoway_sum = 0ULL;
@@ -68,18 +53,8 @@ int main() {
 
         for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
             const auto batch_size = BATCH_SIZE[idx];
-            const auto& lookups = lookup_sets[idx];
-            const auto total_ops = ITERS * batch_size;
             baseline_sum = baseline_results[idx].sum;
-
-            const auto [counter, twoway_lookup_sum] =
-                benchmark_batch(lookups, batch_size, ITERS, [&](uint64_t key, uint64_t* steps) {
-                    return twoway.find(key, steps);
-                });
-            twoway_sum = twoway_lookup_sum;
-
-            const auto twoway_per_lookup =
-                static_cast<double>(counter.cycles) / static_cast<double>(total_ops);
+            twoway_sum = twoway_results[idx].sum;
 
             boost_sum = improve_results[idx].sum;
             const auto boost_per_lookup = improve_results[idx].ticks_per_lookup;
@@ -89,7 +64,7 @@ int main() {
                 std::format("1 << {}", shift),
                 batch_size,
                 baseline_results[idx].ticks_per_lookup,
-                twoway_per_lookup,
+                twoway_results[idx].ticks_per_lookup,
                 boost_per_lookup);
         }
 

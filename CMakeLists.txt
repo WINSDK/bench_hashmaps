@@ -10,12 +10,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_executable(hash
     src/main.cpp
     src/base.hpp
-    src/bench.hpp
+    src/bench_common.hpp
+    src/bench_baseline.hpp
+    src/bench_baseline.cpp
+    src/bench_improve.hpp
+    src/bench_improve.cpp
+    src/bench_twoway.hpp
+    src/bench_twoway.cpp
     src/TwoWay.hpp
-    src/boost_baseline.hpp
-    src/boost_baseline.cpp
-    src/boost_improve.hpp
-    src/boost_improve.cpp
     src/boost_unordered_improve.hpp
     src/boost_unordered_baseline.hpp
     src/measure.cpp

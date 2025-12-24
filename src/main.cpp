@@ -1,10 +1,10 @@
+#include <fcntl.h>
+#include <unistd.h>
 #include <array>
 #include <cstdint>
 #include <print>
 #include <random>
 #include <vector>
-#include <fcntl.h>
-#include <unistd.h>
 
 #include "base.h"
 #include "boost_unordered.hpp"
@@ -43,15 +43,18 @@ uint64_t benchmark_batch(
     return end - start;
 }
 
+constexpr auto ITERS = 50000ULL;
+constexpr std::array<size_t, 8> BATCH_SIZE{1, 2, 4, 8, 16, 32, 64, 128};
+constexpr std::array<size_t, 3> NUM_KEYS_SHIFT{18, 21, 23};
+
 int main() {
     std::println("lookup performance (in cycles):");
-    std::println("N\tbatch\tbaseline\timprove\tboost");
-    constexpr auto kIterations = size_t{100000};
-    constexpr auto kBatchSizes = std::array<size_t, 8>{1, 2, 4, 8, 16, 32, 64, 128};
-    constexpr auto kNumKeysList = std::array<size_t, 3>{1 << 18, 1 << 21, 1 << 23};
+    std::println("{:>10} {:>6} {:>10} {:>10} {:>10}", "N", "batch", "baseline", "improve", "boost");
 
-    for (const auto num_keys : kNumKeysList) {
-        auto keys = std::vector<uint64_t>{};
+    for (auto shift : NUM_KEYS_SHIFT) {
+        const auto num_keys = 1ULL << shift;
+
+        std::vector<uint64_t> keys{};
         keys.reserve(num_keys);
         for (uint64_t i = 0; i < num_keys; i++) {
             keys.push_back(i + 1);
@@ -60,7 +63,7 @@ int main() {
         TwoWayBaseline<U64ToU64TableTrait, 4> baseline;
         TwoWay<U64ToU64TableTrait, 4> candidate;
         boost::unordered::unordered_flat_map<uint64_t, uint64_t> boost_map;
-        boost_map.reserve(num_keys * 2);
+        boost_map.reserve(num_keys * 2); // 50% utilization.
 
         for (const auto key : keys) {
             baseline.insert(key, key);
@@ -68,14 +71,14 @@ int main() {
             boost_map.emplace(key, key);
         }
 
-        auto rng = std::mt19937_64{0xC0FFEE ^ num_keys};
-        auto dist = std::uniform_int_distribution<size_t>{0, keys.size() - 1};
+        std::mt19937_64 rng{0xC0FFEE ^ num_keys};
+        std::uniform_int_distribution<size_t> dist{0, keys.size() - 1};
 
-        auto lookup_sets = std::vector<std::vector<uint64_t>>{};
-        lookup_sets.reserve(kBatchSizes.size());
-        for (const auto batch_size : kBatchSizes) {
+        std::vector<std::vector<uint64_t>> lookup_sets{};
+        lookup_sets.reserve(BATCH_SIZE.size());
+        for (const auto batch_size : BATCH_SIZE) {
             auto lookups = std::vector<uint64_t>{};
-            const auto lookup_count = kIterations * batch_size;
+            const auto lookup_count = ITERS * batch_size;
             lookups.reserve(lookup_count);
             for (size_t i = 0; i < lookup_count; i++) {
                 lookups.push_back(keys[dist(rng)]);
@@ -87,29 +90,29 @@ int main() {
         auto candidate_sum = 0ULL;
         auto boost_sum = 0ULL;
 
-        for (size_t idx = 0; idx < kBatchSizes.size(); idx++) {
-            const auto batch_size = kBatchSizes[idx];
+        for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
+            const auto batch_size = BATCH_SIZE[idx];
             const auto& lookups = lookup_sets[idx];
-            const auto total_ops = kIterations * batch_size;
+            const auto total_ops = ITERS * batch_size;
 
             const auto baseline_cycles = benchmark_batch(
                 lookups,
                 batch_size,
-                kIterations,
+                ITERS,
                 [&](uint64_t key, uint64_t* steps) { return baseline.find(key, steps); },
                 &baseline_sum);
 
             const auto candidate_cycles = benchmark_batch(
                 lookups,
                 batch_size,
-                kIterations,
+                ITERS,
                 [&](uint64_t key, uint64_t* steps) { return candidate.find(key, steps); },
                 &candidate_sum);
 
             const auto boost_cycles = benchmark_batch(
                 lookups,
                 batch_size,
-                kIterations,
+                ITERS,
                 [&](uint64_t key, uint64_t*) {
                     const auto it = boost_map.find(key);
                     return it->second;
@@ -124,15 +127,15 @@ int main() {
                 static_cast<double>(boost_cycles) / static_cast<double>(total_ops);
 
             std::println(
-                "{}\t{}\t{:.2f}\t{:.2f}\t{:.2f}",
-                num_keys,
+                "{:>10} {:>6} {:>10.2f} {:>10.2f} {:>10.2f}",
+                std::format("1 << {}", shift),
                 batch_size,
                 baseline_per_lookup,
                 candidate_per_lookup,
                 boost_per_lookup);
         }
 
-        // Write sum to /dev/null to break to prevent optimizing intermediate results. 
+        // Write sum to /dev/null to break to prevent optimizing intermediate results.
         for (const auto sum : {baseline_sum, candidate_sum, boost_sum}) {
             write(open("/dev/null", O_WRONLY), &sum, sizeof(sum));
         }

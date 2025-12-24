@@ -12,7 +12,7 @@ struct BenchResult {
     uint64_t sum;
 };
 
-inline std::tuple<performance_counters, uint64_t> benchmark_batch(
+inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
     std::span<const uint64_t> lookups,
     size_t batch_size,
     size_t iterations,

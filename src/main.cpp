@@ -12,7 +12,6 @@
 #include "bench.hpp"
 #include "boost_baseline.hpp"
 #include "boost_improve.hpp"
-#include "measure.hpp"
 
 struct U64ToU64TableTrait {
     using Key = uint64_t;
@@ -46,7 +45,7 @@ int main() {
         std::vector<std::vector<uint64_t>> lookup_sets{};
         lookup_sets.reserve(BATCH_SIZE.size());
         for (const auto batch_size : BATCH_SIZE) {
-            auto lookups = std::vector<uint64_t>{};
+            std::vector<uint64_t> lookups{};
             const auto lookup_count = ITERS * batch_size;
             lookups.reserve(lookup_count);
             for (size_t i = 0; i < lookup_count; i++) {
@@ -58,7 +57,7 @@ int main() {
         const auto baseline_results = benchmark_boost_baseline(keys, lookup_sets, ITERS);
         const auto improve_results = benchmark_boost_improve(keys, lookup_sets, ITERS);
 
-        auto twoway = TwoWay<U64ToU64TableTrait, 4>{};
+        TwoWay<U64ToU64TableTrait, 4> twoway{};
         for (const auto key : keys) {
             twoway.insert(key, key);
         }

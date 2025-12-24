@@ -2,33 +2,33 @@
 
 #include <format>
 
-struct performance_counters {
+struct PerfCounters {
     double cycles;
     double branches;
     double missed_branches;
     double instructions;
-    performance_counters(uint64_t c, uint64_t b, uint64_t m, uint64_t i)
+    PerfCounters(uint64_t c, uint64_t b, uint64_t m, uint64_t i)
         : cycles(c), branches(b), missed_branches(m), instructions(i) {}
-    performance_counters(double c, double b, double m, double i)
+    PerfCounters(double c, double b, double m, double i)
         : cycles(c), branches(b), missed_branches(m), instructions(i) {}
-    performance_counters(double init)
+    PerfCounters(double init)
         : cycles(init), branches(init), missed_branches(init), instructions(init) {}
 
-    inline performance_counters& operator-=(const performance_counters& other) {
+    inline PerfCounters& operator-=(const PerfCounters& other) {
         cycles -= other.cycles;
         branches -= other.branches;
         missed_branches -= other.missed_branches;
         instructions -= other.instructions;
         return *this;
     }
-    inline performance_counters operator-(const performance_counters& other) const {
-        return performance_counters(
+    inline PerfCounters operator-(const PerfCounters& other) const {
+        return PerfCounters(
             cycles - other.cycles,
             branches - other.branches,
             missed_branches - other.missed_branches,
             instructions - other.instructions);
     }
-    inline performance_counters& min(const performance_counters& other) {
+    inline PerfCounters& min(const PerfCounters& other) {
         cycles = other.cycles < cycles ? other.cycles : cycles;
         branches = other.branches < branches ? other.branches : branches;
         missed_branches =
@@ -36,7 +36,7 @@ struct performance_counters {
         instructions = other.instructions < instructions ? other.instructions : instructions;
         return *this;
     }
-    inline performance_counters& operator+=(const performance_counters& other) {
+    inline PerfCounters& operator+=(const PerfCounters& other) {
         cycles += other.cycles;
         branches += other.branches;
         missed_branches += other.missed_branches;
@@ -44,7 +44,7 @@ struct performance_counters {
         return *this;
     }
 
-    inline performance_counters& operator/=(double numerator) {
+    inline PerfCounters& operator/=(double numerator) {
         cycles /= numerator;
         branches /= numerator;
         missed_branches /= numerator;
@@ -54,10 +54,10 @@ struct performance_counters {
 };
 
 template <>
-struct std::formatter<performance_counters> : std::formatter<double> {
+struct std::formatter<PerfCounters> : std::formatter<double> {
     using Base = std::formatter<double>;
 
-    auto format(const performance_counters& pc, auto& ctx) const {
+    auto format(const PerfCounters& pc, auto& ctx) const {
         auto out = ctx.out();
 
         out = std::format_to(out, "performance_counters{{cycles=");
@@ -97,7 +97,7 @@ class EventRecorder {
 public:
     explicit EventRecorder();
 
-    performance_counters get_counters();
+    PerfCounters get_counters();
 };
 
 extern EventRecorder RECORDER;

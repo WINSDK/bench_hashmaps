@@ -904,7 +904,7 @@ EventRecorder::EventRecorder() {
     }
 }
 
-performance_counters EventRecorder::get_counters() {
+PerfCounters EventRecorder::get_counters() {
     static bool warned = false;
     int ret;
     // get counters before
@@ -915,7 +915,7 @@ performance_counters EventRecorder::get_counters() {
         }
         return 1;
     }
-    return performance_counters{
+    return PerfCounters{
         counters_0[counter_map[0]],
         counters_0[counter_map[2]],
         counters_0[counter_map[3]],

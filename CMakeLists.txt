@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
+
+include(cmake/llvm-toolchain.cmake)
+ensure_pinned_llvm_compilers()
 
 project(hash LANGUAGES CXX)
 
@@ -7,8 +10,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_executable(hash
     src/main.cpp
     src/base.h
+    src/bench.h
     src/two_way.h
-    src/boost_unordered.hpp
+    src/boost_baseline.h
+    src/boost_baseline.cpp
+    src/boost_improve.h
+    src/boost_improve.cpp
+    src/boost_unordered_improve.hpp
+    src/boost_unordered_baseline.hpp
 )
 
 target_compile_features(hash PRIVATE cxx_std_23)
@@ -21,8 +30,8 @@ if(HASH_BUILD_TESTS)
     find_package(GTest QUIET)
     if(NOT GTest_FOUND)
         include(FetchContent)
-        set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+        set(BUILD_GMOCK OFF)
+        set(INSTALL_GTEST OFF)
         FetchContent_Declare(
             googletest
             URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
@@ -31,14 +40,13 @@ if(HASH_BUILD_TESTS)
         FetchContent_MakeAvailable(googletest)
     endif()
 
-    add_executable(test_two_way
+    add_executable(tests
         tests/test_two_way.cpp
     )
-    target_compile_features(test_two_way PRIVATE cxx_std_23)
-    target_include_directories(test_two_way PRIVATE src)
-    target_link_libraries(test_two_way PRIVATE GTest::gtest_main)
-    target_compile_options(test_two_way PRIVATE -fcolor-diagnostics)
+    target_compile_features(tests PRIVATE cxx_std_23)
+    target_include_directories(tests PRIVATE src)
+    target_link_libraries(tests PRIVATE GTest::gtest_main)
+    target_compile_options(tests PRIVATE -fcolor-diagnostics)
 
-    include(GoogleTest)
-    gtest_discover_tests(test_two_way)
+    add_test(NAME tests COMMAND tests)
 endif()

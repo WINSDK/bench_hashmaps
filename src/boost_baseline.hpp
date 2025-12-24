@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bench.h"
+#include "bench.hpp"
 
 #include <span>
 #include <vector>

@@ -7,11 +7,12 @@
 #include <span>
 #include <vector>
 
-#include "base.h"
-#include "bench.h"
-#include "boost_baseline.h"
-#include "boost_improve.h"
-#include "two_way.h"
+#include "TwoWay.hpp"
+#include "base.hpp"
+#include "bench.hpp"
+#include "boost_baseline.hpp"
+#include "boost_improve.hpp"
+#include "measure.hpp"
 
 struct U64ToU64TableTrait {
     using Key = uint64_t;
@@ -27,12 +28,7 @@ constexpr std::array<size_t, 8> BATCH_SIZE{1, 2, 4, 8, 16, 32, 64, 128};
 constexpr std::array<size_t, 5> NUM_KEYS_SHIFT{8, 10, 12, 14, 16};
 
 int main() {
-    const auto tick_hz = tick_frequency_hz();
-#if defined(__aarch64__)
-    std::println("lookup performance (in ticks @ {} Hz):", tick_hz);
-#else
     std::println("lookup performance (in cycles):");
-#endif
     std::println("{:>10} {:>6} {:>10} {:>10} {:>10}", "N", "batch", "baseline", "twoway", "boost");
 
     for (auto shift : NUM_KEYS_SHIFT) {
@@ -77,14 +73,15 @@ int main() {
             const auto total_ops = ITERS * batch_size;
             baseline_sum = baseline_results[idx].sum;
 
-            const auto [twoway_cycles, twoway_lookup_sum] =
+            const auto [counter, twoway_lookup_sum] =
                 benchmark_batch(lookups, batch_size, ITERS, [&](uint64_t key, uint64_t* steps) {
                     return twoway.find(key, steps);
                 });
             twoway_sum = twoway_lookup_sum;
 
             const auto twoway_per_lookup =
-                static_cast<double>(twoway_cycles) / static_cast<double>(total_ops);
+                static_cast<double>(counter.cycles) / static_cast<double>(total_ops);
+
             boost_sum = improve_results[idx].sum;
             const auto boost_per_lookup = improve_results[idx].ticks_per_lookup;
 

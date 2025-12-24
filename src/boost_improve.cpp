@@ -1,4 +1,4 @@
-#include "boost_improve.h"
+#include "boost_improve.hpp"
 #include "boost_unordered_improve.hpp"
 
 #include <span>
@@ -21,13 +21,13 @@ std::vector<BenchResult> benchmark_boost_improve(
         const auto lookup_count = lookups.size();
         const auto batch_size = lookup_count / iterations;
 
-        auto [ticks, sum] =
+        auto [counter, sum] =
             benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
                 return it->second;
             });
 
-        auto per_lookup = static_cast<double>(ticks) / static_cast<double>(lookup_count);
+        auto per_lookup = static_cast<double>(counter.cycles) / static_cast<double>(lookup_count);
         results.emplace_back(per_lookup, sum);
     }
 

@@ -9,15 +9,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(hash
     src/main.cpp
-    src/base.h
-    src/bench.h
-    src/two_way.h
-    src/boost_baseline.h
+    src/base.hpp
+    src/bench.hpp
+    src/TwoWay.hpp
+    src/boost_baseline.hpp
     src/boost_baseline.cpp
-    src/boost_improve.h
+    src/boost_improve.hpp
     src/boost_improve.cpp
     src/boost_unordered_improve.hpp
     src/boost_unordered_baseline.hpp
+    src/measure.cpp
+    src/measure.hpp
 )
 
 target_compile_features(hash PRIVATE cxx_std_23)

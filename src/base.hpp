@@ -12,7 +12,6 @@ constexpr auto CACHE_LINE = 64;
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
-#include <intrin.h>
 #elif defined(__aarch64__)
 #if defined(__APPLE__)
 #include <mach/mach_time.h>

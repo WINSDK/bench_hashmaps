@@ -25,9 +25,9 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
     size_t batch_size,
     size_t iters,
     auto&& lookup_fn) {
-    auto sum = 0ULL;
-    auto steps = 0ULL;
-    auto offset = 0ULL;
+    uint64_t sum = 0;
+    uint64_t steps = 0;
+    size_t offset = 0;
 
     const auto start = RECORDER.get_counters();
     for (size_t iter = 0; iter < iters; iter++) {

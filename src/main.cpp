@@ -125,7 +125,8 @@ std::string format_cell(const BenchResult& result) {
     const auto branch_hit =
         hit_rate_percent(result.counter.branches, result.counter.missed_branches);
     const auto l1d_hit = hit_rate_percent(result.counter.l1d_accesses, result.counter.l1d_misses);
-    return std::format("{}/{}/{}", cycles_per_lookup, branch_hit, l1d_hit);
+    const auto llc_hit = hit_rate_percent(result.counter.llc_accesses, result.counter.llc_misses);
+    return std::format("{}/{}/{}/{}", cycles_per_lookup, branch_hit, l1d_hit, llc_hit);
 }
 
 Table make_table(const BenchSet& set) {

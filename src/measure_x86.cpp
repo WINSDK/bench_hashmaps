@@ -10,6 +10,7 @@
 #include <cstring>
 #include <print>
 #include <string_view>
+#include <utility>
 
 #include "measure.hpp"
 
@@ -21,7 +22,7 @@ uint64_t read_tsc() {
 }
 
 int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, unsigned long flags) {
-    return static_cast<int>(syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags));
+    return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
 }
 
 bool debug_enabled() {
@@ -29,7 +30,8 @@ bool debug_enabled() {
     if (!env) {
         return false;
     }
-    return env && env[0] != '\0' && std::strcmp(env, "0") != 0;
+    const std::string_view value{env};
+    return !value.empty() && value != "0";
 }
 
 struct PerfEventGroup {
@@ -43,8 +45,7 @@ struct PerfEventGroup {
         if (!open_group(true)) {
             if (debug_enabled()) {
                 std::println(
-                    stderr,
-                    "perf: cache events unavailable, falling back to base counters");
+                    stderr, "perf: L1D events unavailable, falling back to base counters");
             }
             open_group(false);
         }
@@ -78,8 +79,7 @@ struct PerfEventGroup {
             ? 1.0
             : static_cast<double>(time_enabled) / static_cast<double>(time_running);
         auto scaled_value = [&](size_t idx) {
-            return static_cast<uint64_t>(
-                static_cast<double>(data[3 + idx]) * scale);
+            return static_cast<uint64_t>(static_cast<double>(data[3 + idx]) * scale);
         };
 
         PerfCounters counters{};
@@ -139,28 +139,26 @@ private:
             return fd;
         };
 
-        auto open_member_cache = [&](uint64_t cache_id,
-                                     uint64_t op,
-                                     uint64_t result,
-                                     std::string_view name) {
-            perf_event_attr attr{};
-            attr.type = PERF_TYPE_HW_CACHE;
-            attr.size = sizeof(attr);
-            attr.disabled = 0;
-            attr.exclude_kernel = 1;
-            attr.exclude_hv = 1;
-            attr.config = cache_id | (op << 8) | (result << 16);
-            const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
-            if (fd < 0 && debug_enabled()) {
-                std::println(
-                    stderr,
-                    "perf: perf_event_open failed for {}: {} (errno={})",
-                    name,
-                    std::strerror(errno),
-                    errno);
-            }
-            return fd;
-        };
+        auto open_member_cache =
+            [&](uint64_t cache_id, uint64_t op, uint64_t result, std::string_view name) {
+                perf_event_attr attr{};
+                attr.type = PERF_TYPE_HW_CACHE;
+                attr.size = sizeof(attr);
+                attr.disabled = 0;
+                attr.exclude_kernel = 1;
+                attr.exclude_hv = 1;
+                attr.config = cache_id | (op << 8) | (result << 16);
+                const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
+                if (fd < 0 && debug_enabled()) {
+                    std::println(
+                        stderr,
+                        "perf: perf_event_open failed for {}: {} (errno={})",
+                        name,
+                        std::strerror(errno),
+                        errno);
+                }
+                return fd;
+            };
 
         fds[1] = open_member_hw(PERF_COUNT_HW_BRANCH_INSTRUCTIONS, "branch-instructions");
         fds[2] = open_member_hw(PERF_COUNT_HW_BRANCH_MISSES, "branch-misses");
@@ -185,7 +183,6 @@ private:
                 close_all();
                 return false;
             }
-
             event_count = EVENT_COUNT_FULL;
         } else {
             event_count = 4;
@@ -207,10 +204,132 @@ private:
     }
 };
 
+struct LlcEventGroup {
+    static constexpr size_t EVENT_COUNT = 2;
+    std::array<int, EVENT_COUNT> fds{};
+    bool ok = false;
+
+    LlcEventGroup() {
+        fds.fill(-1);
+        if (!open_group() && debug_enabled()) {
+            std::println(stderr, "perf: LLC events unavailable");
+        }
+    }
+
+    ~LlcEventGroup() {
+        for (auto fd : fds) {
+            if (fd != -1) {
+                close(fd);
+                fd = -1;
+            }
+        }
+    }
+
+    std::pair<uint64_t, uint64_t> read() const {
+        if (!ok) {
+            return {0, 0};
+        }
+
+        std::array<uint64_t, 3 + EVENT_COUNT> data{};
+        const size_t expected_bytes = data.size() * sizeof(uint64_t);
+        const auto res = ::read(fds[0], data.data(), expected_bytes);
+        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < EVENT_COUNT) {
+            return {0, 0};
+        }
+
+        const uint64_t time_enabled = data[1];
+        const uint64_t time_running = data[2];
+        const double scale = (time_running == 0 || time_running == time_enabled)
+            ? 1.0
+            : static_cast<double>(time_enabled) / static_cast<double>(time_running);
+        auto scaled_value = [&](size_t idx) {
+            return static_cast<uint64_t>(static_cast<double>(data[3 + idx]) * scale);
+        };
+
+        return {scaled_value(0), scaled_value(1)};
+    }
+
+private:
+    bool open_group() {
+        auto open_member_cache =
+            [&](uint64_t cache_id, uint64_t op, uint64_t result, std::string_view name) {
+                perf_event_attr attr{};
+                attr.type = PERF_TYPE_HW_CACHE;
+                attr.size = sizeof(attr);
+                attr.disabled = 0;
+                attr.exclude_kernel = 1;
+                attr.exclude_hv = 1;
+                attr.config = cache_id | (op << 8) | (result << 16);
+                const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
+                if (fd < 0 && debug_enabled()) {
+                    std::println(
+                        stderr,
+                        "perf: perf_event_open failed for {}: {} (errno={})",
+                        name,
+                        std::strerror(errno),
+                        errno);
+                }
+                return fd;
+            };
+
+        perf_event_attr leader{};
+        leader.type = PERF_TYPE_HW_CACHE;
+        leader.size = sizeof(leader);
+        leader.disabled = 0;
+        leader.exclude_kernel = 1;
+        leader.exclude_hv = 1;
+        leader.read_format =
+            PERF_FORMAT_GROUP | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+        leader.config = PERF_COUNT_HW_CACHE_LL |
+            (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+            (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16);
+        fds[0] = perf_event_open(&leader, 0, -1, -1, 0);
+        if (fds[0] < 0) {
+            if (debug_enabled()) {
+                std::println(
+                    stderr,
+                    "perf: perf_event_open failed for llc-read-access: {} (errno={})",
+                    std::strerror(errno),
+                    errno);
+            }
+            close_all();
+            return false;
+        }
+
+        fds[1] = open_member_cache(
+            PERF_COUNT_HW_CACHE_LL,
+            PERF_COUNT_HW_CACHE_OP_READ,
+            PERF_COUNT_HW_CACHE_RESULT_MISS,
+            "llc-read-miss");
+        if (fds[1] < 0) {
+            close_all();
+            return false;
+        }
+
+        ok = true;
+        return true;
+    }
+
+    void close_all() {
+        for (auto& fd : fds) {
+            if (fd != -1) {
+                close(fd);
+            }
+            fd = -1;
+        }
+        ok = false;
+    }
+};
+
 struct X86Recorder {
     PerfCounters get_counters() const {
         static PerfEventGroup group{};
-        return group.read();
+        static LlcEventGroup llc_group{};
+        auto counters = group.read();
+        const auto [llc_accesses, llc_misses] = llc_group.read();
+        counters.llc_accesses = llc_accesses;
+        counters.llc_misses = llc_misses;
+        return counters;
     }
 };
 

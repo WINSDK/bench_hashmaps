@@ -27,8 +27,8 @@ Capacity/load factor:
 Lookups grouped by N where
 * rows = different hashmap implementation  
 * cols = batch size (lookups per iteration, to test repeated lookups in a tight loop)
-* cell = cycles per lookup / branch hit rate% / L1D hit rate%
-* hit rates use perf_event counters (L1D read accesses/misses), "na" if unavailable
+* cell = cycles per lookup / branch hit rate% / L1D hit rate% / LLC hit rate%
+* hit rates use perf_event counters (L1D/LLC read accesses/misses), "na" if unavailable
 
 Lookup sets:
 * Spare elements: random uniform lookups

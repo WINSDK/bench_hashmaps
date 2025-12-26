@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <flat_map>
@@ -50,6 +51,7 @@ struct U64ToU64TableTrait {
         return squirrel3(key);
     }
 };
+
 } // namespace detail
 
 inline std::vector<BenchResult> benchmark_boost(
@@ -72,6 +74,7 @@ inline std::vector<BenchResult> benchmark_boost(
         auto [counter, sum] =
             benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
+                assert(it != map.end());
                 return it->second;
             });
 
@@ -128,6 +131,7 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
         auto [counter, sum] =
             benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
+                assert(it != map.end());
                 return it->second;
             });
 
@@ -157,6 +161,7 @@ inline std::vector<BenchResult> benchmark_std_unordered_map(
         auto [counter, sum] =
             benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
+                assert(it != map.end());
                 return it->second;
             });
 
@@ -188,6 +193,7 @@ inline std::vector<BenchResult> benchmark_std_flat_map(
         auto [counter, sum] =
             benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
+                assert(it != map.end());
                 return it->second;
             });
 

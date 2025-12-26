@@ -5,7 +5,11 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <array>
+#include <cerrno>
+#include <cstdlib>
 #include <cstring>
+#include <print>
+#include <string_view>
 
 #include "measure.hpp"
 
@@ -20,6 +24,14 @@ int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, uns
     return static_cast<int>(syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags));
 }
 
+bool debug_enabled() {
+    const char* env = std::getenv("PERF_DEBUG");
+    if (!env) {
+        return false;
+    }
+    return env && env[0] != '\0' && std::strcmp(env, "0") != 0;
+}
+
 struct PerfEventGroup {
     static constexpr size_t EVENT_COUNT_FULL = 8;
     std::array<int, EVENT_COUNT_FULL> fds{};
@@ -29,6 +41,11 @@ struct PerfEventGroup {
     PerfEventGroup() {
         fds.fill(-1);
         if (!open_group(true)) {
+            if (debug_enabled()) {
+                std::println(
+                    stderr,
+                    "perf: cache events unavailable, falling back to base counters");
+            }
             open_group(false);
         }
     }
@@ -94,10 +111,17 @@ private:
         leader.config = PERF_COUNT_HW_CPU_CYCLES;
         fds[0] = perf_event_open(&leader, 0, -1, -1, 0);
         if (fds[0] < 0) {
+            if (debug_enabled()) {
+                std::println(
+                    stderr,
+                    "perf: perf_event_open failed for cpu-cycles: {} (errno={})",
+                    std::strerror(errno),
+                    errno);
+            }
             return false;
         }
 
-        auto open_member_hw = [&](uint64_t config) {
+        auto open_member_hw = [&](uint64_t config, std::string_view name) {
             perf_event_attr attr{};
             attr.type = PERF_TYPE_HARDWARE;
             attr.size = sizeof(attr);
@@ -105,10 +129,22 @@ private:
             attr.exclude_kernel = 1;
             attr.exclude_hv = 1;
             attr.config = config;
-            return perf_event_open(&attr, 0, -1, fds[0], 0);
+            const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
+            if (fd < 0 && debug_enabled()) {
+                std::println(
+                    stderr,
+                    "perf: perf_event_open failed for {}: {} (errno={})",
+                    name,
+                    std::strerror(errno),
+                    errno);
+            }
+            return fd;
         };
 
-        auto open_member_cache = [&](uint64_t cache_id, uint64_t op, uint64_t result) {
+        auto open_member_cache = [&](uint64_t cache_id,
+                                     uint64_t op,
+                                     uint64_t result,
+                                     std::string_view name) {
             perf_event_attr attr{};
             attr.type = PERF_TYPE_HW_CACHE;
             attr.size = sizeof(attr);
@@ -116,12 +152,21 @@ private:
             attr.exclude_kernel = 1;
             attr.exclude_hv = 1;
             attr.config = cache_id | (op << 8) | (result << 16);
-            return perf_event_open(&attr, 0, -1, fds[0], 0);
+            const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
+            if (fd < 0 && debug_enabled()) {
+                std::println(
+                    stderr,
+                    "perf: perf_event_open failed for {}: {} (errno={})",
+                    name,
+                    std::strerror(errno),
+                    errno);
+            }
+            return fd;
         };
 
-        fds[1] = open_member_hw(PERF_COUNT_HW_BRANCH_INSTRUCTIONS);
-        fds[2] = open_member_hw(PERF_COUNT_HW_BRANCH_MISSES);
-        fds[3] = open_member_hw(PERF_COUNT_HW_INSTRUCTIONS);
+        fds[1] = open_member_hw(PERF_COUNT_HW_BRANCH_INSTRUCTIONS, "branch-instructions");
+        fds[2] = open_member_hw(PERF_COUNT_HW_BRANCH_MISSES, "branch-misses");
+        fds[3] = open_member_hw(PERF_COUNT_HW_INSTRUCTIONS, "instructions");
         if (fds[1] < 0 || fds[2] < 0 || fds[3] < 0) {
             close_all();
             return false;
@@ -131,19 +176,23 @@ private:
             fds[4] = open_member_cache(
                 PERF_COUNT_HW_CACHE_L1D,
                 PERF_COUNT_HW_CACHE_OP_READ,
-                PERF_COUNT_HW_CACHE_RESULT_ACCESS);
+                PERF_COUNT_HW_CACHE_RESULT_ACCESS,
+                "l1d-read-access");
             fds[5] = open_member_cache(
                 PERF_COUNT_HW_CACHE_L1D,
                 PERF_COUNT_HW_CACHE_OP_READ,
-                PERF_COUNT_HW_CACHE_RESULT_MISS);
+                PERF_COUNT_HW_CACHE_RESULT_MISS,
+                "l1d-read-miss");
             fds[6] = open_member_cache(
                 PERF_COUNT_HW_CACHE_LL,
                 PERF_COUNT_HW_CACHE_OP_READ,
-                PERF_COUNT_HW_CACHE_RESULT_ACCESS);
+                PERF_COUNT_HW_CACHE_RESULT_ACCESS,
+                "llc-read-access");
             fds[7] = open_member_cache(
                 PERF_COUNT_HW_CACHE_LL,
                 PERF_COUNT_HW_CACHE_OP_READ,
-                PERF_COUNT_HW_CACHE_RESULT_MISS);
+                PERF_COUNT_HW_CACHE_RESULT_MISS,
+                "llc-read-miss");
             if (fds[4] < 0 || fds[5] < 0 || fds[6] < 0 || fds[7] < 0) {
                 close_all();
                 return false;

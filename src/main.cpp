@@ -121,15 +121,11 @@ std::string hit_rate_percent(uint64_t accesses, uint64_t misses) {
 }
 
 std::string format_cell(const BenchResult& result) {
-    const auto cycles_per_lookup = result.lookups == 0
-        ? 0
-        : result.counter.cycles / result.lookups;
+    const auto cycles_per_lookup = result.lookups == 0 ? 0 : result.counter.cycles / result.lookups;
     const auto branch_hit =
         hit_rate_percent(result.counter.branches, result.counter.missed_branches);
-    const auto l1d_hit =
-        hit_rate_percent(result.counter.l1d_accesses, result.counter.l1d_misses);
-    const auto llc_hit =
-        hit_rate_percent(result.counter.llc_accesses, result.counter.llc_misses);
+    const auto l1d_hit = hit_rate_percent(result.counter.l1d_accesses, result.counter.l1d_misses);
+    const auto llc_hit = hit_rate_percent(result.counter.llc_accesses, result.counter.llc_misses);
     return std::format("{}/{}/{}/{}", cycles_per_lookup, branch_hit, l1d_hit, llc_hit);
 }
 
@@ -142,7 +138,7 @@ Table make_table(const BenchSet& set) {
 
     struct RowSpec {
         std::string_view name;
-        const std::vector<BenchResult> BenchSet::*member;
+        const std::vector<BenchResult> BenchSet::* member;
     };
     constexpr std::array<RowSpec, 5> kRows{{
         {"boost", &BenchSet::boost},
@@ -258,9 +254,7 @@ void print_section(std::string_view title, std::span<const BenchSet> results) {
     for (const auto& entry : tables) {
         std::println();
         std::println(
-            "{:^{}}",
-            std::format("N = {} (1 << {})", 1ULL << entry.shift, entry.shift),
-            max_width);
+            "{:^{}}", std::format("N = {} (1 << {})", 1ULL << entry.shift, entry.shift), max_width);
         print_table(entry.table);
         std::println();
     }

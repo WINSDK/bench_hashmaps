@@ -21,47 +21,16 @@ int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, uns
 }
 
 struct PerfEventGroup {
-    std::array<int, 4> fds{-1, -1, -1, -1};
+    static constexpr size_t EVENT_COUNT_FULL = 8;
+    std::array<int, EVENT_COUNT_FULL> fds{};
+    size_t event_count = 0;
     bool ok = false;
 
     PerfEventGroup() {
-        perf_event_attr leader{};
-        leader.type = PERF_TYPE_HARDWARE;
-        leader.size = sizeof(leader);
-        leader.disabled = 0;
-        leader.exclude_kernel = 1;
-        leader.exclude_hv = 1;
-        leader.read_format = PERF_FORMAT_GROUP;
-        leader.config = PERF_COUNT_HW_CPU_CYCLES;
-        fds[0] = perf_event_open(&leader, 0, -1, -1, 0);
-        if (fds[0] < 0) {
-            return;
+        fds.fill(-1);
+        if (!open_group(true)) {
+            open_group(false);
         }
-
-        auto open_member = [&](uint64_t config) {
-            perf_event_attr attr{};
-            attr.type = PERF_TYPE_HARDWARE;
-            attr.size = sizeof(attr);
-            attr.disabled = 0;
-            attr.exclude_kernel = 1;
-            attr.exclude_hv = 1;
-            attr.config = config;
-            return perf_event_open(&attr, 0, -1, fds[0], 0);
-        };
-
-        fds[1] = open_member(PERF_COUNT_HW_BRANCH_INSTRUCTIONS);
-        fds[2] = open_member(PERF_COUNT_HW_BRANCH_MISSES);
-        fds[3] = open_member(PERF_COUNT_HW_INSTRUCTIONS);
-        if (fds[1] < 0 || fds[2] < 0 || fds[3] < 0) {
-            for (auto& fd : fds) {
-                if (fd >= 0) {
-                    close(fd);
-                }
-                fd = -1;
-            }
-            return;
-        }
-        ok = true;
     }
 
     ~PerfEventGroup() {
@@ -78,18 +47,125 @@ struct PerfEventGroup {
             return PerfCounters{read_tsc(), 0, 0, 0};
         }
 
-        struct ReadData {
-            uint64_t nr;
-            uint64_t values[4];
-        };
-
-        ReadData data{};
-        const auto expected = static_cast<ssize_t>(sizeof(data));
-        const auto res = ::read(fds[0], &data, sizeof(data));
-        if (res < expected || data.nr < 4) {
+        std::array<uint64_t, 3 + EVENT_COUNT_FULL> data{};
+        const size_t expected_words = 3 + event_count;
+        const size_t expected_bytes = expected_words * sizeof(uint64_t);
+        const auto res = ::read(fds[0], data.data(), data.size() * sizeof(uint64_t));
+        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < event_count) {
             return PerfCounters{read_tsc(), 0, 0, 0};
         }
-        return PerfCounters{data.values[0], data.values[1], data.values[2], data.values[3]};
+
+        const uint64_t time_enabled = data[1];
+        const uint64_t time_running = data[2];
+        const double scale = (time_running == 0 || time_running == time_enabled)
+            ? 1.0
+            : static_cast<double>(time_enabled) / static_cast<double>(time_running);
+        auto scaled_value = [&](size_t idx) {
+            return static_cast<uint64_t>(
+                static_cast<double>(data[3 + idx]) * scale);
+        };
+
+        PerfCounters counters{};
+        counters.cycles = scaled_value(0);
+        counters.branches = scaled_value(1);
+        counters.missed_branches = scaled_value(2);
+        counters.instructions = scaled_value(3);
+
+        if (event_count == EVENT_COUNT_FULL) {
+            counters.l1d_accesses = scaled_value(4);
+            counters.l1d_misses = scaled_value(5);
+            counters.llc_accesses = scaled_value(6);
+            counters.llc_misses = scaled_value(7);
+        }
+
+        return counters;
+    }
+
+private:
+    bool open_group(bool include_cache) {
+        perf_event_attr leader{};
+        leader.type = PERF_TYPE_HARDWARE;
+        leader.size = sizeof(leader);
+        leader.disabled = 0;
+        leader.exclude_kernel = 1;
+        leader.exclude_hv = 1;
+        leader.read_format =
+            PERF_FORMAT_GROUP | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+        leader.config = PERF_COUNT_HW_CPU_CYCLES;
+        fds[0] = perf_event_open(&leader, 0, -1, -1, 0);
+        if (fds[0] < 0) {
+            return false;
+        }
+
+        auto open_member_hw = [&](uint64_t config) {
+            perf_event_attr attr{};
+            attr.type = PERF_TYPE_HARDWARE;
+            attr.size = sizeof(attr);
+            attr.disabled = 0;
+            attr.exclude_kernel = 1;
+            attr.exclude_hv = 1;
+            attr.config = config;
+            return perf_event_open(&attr, 0, -1, fds[0], 0);
+        };
+
+        auto open_member_cache = [&](uint64_t cache_id, uint64_t op, uint64_t result) {
+            perf_event_attr attr{};
+            attr.type = PERF_TYPE_HW_CACHE;
+            attr.size = sizeof(attr);
+            attr.disabled = 0;
+            attr.exclude_kernel = 1;
+            attr.exclude_hv = 1;
+            attr.config = cache_id | (op << 8) | (result << 16);
+            return perf_event_open(&attr, 0, -1, fds[0], 0);
+        };
+
+        fds[1] = open_member_hw(PERF_COUNT_HW_BRANCH_INSTRUCTIONS);
+        fds[2] = open_member_hw(PERF_COUNT_HW_BRANCH_MISSES);
+        fds[3] = open_member_hw(PERF_COUNT_HW_INSTRUCTIONS);
+        if (fds[1] < 0 || fds[2] < 0 || fds[3] < 0) {
+            close_all();
+            return false;
+        }
+
+        if (include_cache) {
+            fds[4] = open_member_cache(
+                PERF_COUNT_HW_CACHE_L1D,
+                PERF_COUNT_HW_CACHE_OP_READ,
+                PERF_COUNT_HW_CACHE_RESULT_ACCESS);
+            fds[5] = open_member_cache(
+                PERF_COUNT_HW_CACHE_L1D,
+                PERF_COUNT_HW_CACHE_OP_READ,
+                PERF_COUNT_HW_CACHE_RESULT_MISS);
+            fds[6] = open_member_cache(
+                PERF_COUNT_HW_CACHE_LL,
+                PERF_COUNT_HW_CACHE_OP_READ,
+                PERF_COUNT_HW_CACHE_RESULT_ACCESS);
+            fds[7] = open_member_cache(
+                PERF_COUNT_HW_CACHE_LL,
+                PERF_COUNT_HW_CACHE_OP_READ,
+                PERF_COUNT_HW_CACHE_RESULT_MISS);
+            if (fds[4] < 0 || fds[5] < 0 || fds[6] < 0 || fds[7] < 0) {
+                close_all();
+                return false;
+            }
+            event_count = EVENT_COUNT_FULL;
+        } else {
+            event_count = 4;
+        }
+
+        ok = true;
+        return true;
+    }
+
+    void close_all() {
+        for (auto& fd : fds) {
+            if (fd != -1) {
+                close(fd);
+            }
+            fd = -1;
+        }
+        ok = false;
+        event_count = 0;
     }
 };
 

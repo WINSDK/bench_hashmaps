@@ -113,18 +113,24 @@ struct TableOutput {
     Table table;
 };
 
-uint64_t hit_rate_percent(const PerfCounters& counter) {
-    if (counter.branches == 0) {
-        return 100;
+std::string hit_rate_percent(uint64_t accesses, uint64_t misses) {
+    if (accesses == 0) {
+        return "na";
     }
-    return 100 - (counter.missed_branches * 100 / counter.branches);
+    return std::format("{}", 100 - (misses * 100 / accesses));
 }
 
 std::string format_cell(const BenchResult& result) {
     const auto cycles_per_lookup = result.lookups == 0
         ? 0
         : result.counter.cycles / result.lookups;
-    return std::format("{}/{}", cycles_per_lookup, hit_rate_percent(result.counter));
+    const auto branch_hit =
+        hit_rate_percent(result.counter.branches, result.counter.missed_branches);
+    const auto l1d_hit =
+        hit_rate_percent(result.counter.l1d_accesses, result.counter.l1d_misses);
+    const auto llc_hit =
+        hit_rate_percent(result.counter.llc_accesses, result.counter.llc_misses);
+    return std::format("{}/{}/{}/{}", cycles_per_lookup, branch_hit, l1d_hit, llc_hit);
 }
 
 Table make_table(const BenchSet& set) {

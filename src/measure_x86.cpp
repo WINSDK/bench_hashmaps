@@ -16,7 +16,6 @@ uint64_t read_tsc() {
     return tsc;
 }
 
-namespace {
 int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, unsigned long flags) {
     return static_cast<int>(syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags));
 }
@@ -93,7 +92,6 @@ struct PerfEventGroup {
         return PerfCounters{data.values[0], data.values[1], data.values[2], data.values[3]};
     }
 };
-} // namespace
 
 struct X86Recorder {
     PerfCounters get_counters() const {

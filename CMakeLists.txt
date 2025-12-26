@@ -35,7 +35,7 @@ endif()
 target_sources(hash PRIVATE ${MEASURE_SRC})
 
 target_compile_features(hash PRIVATE cxx_std_23)
-set(COMPILE_OPTIONS
+set(COMPILE_FLAGS
   -fcolor-diagnostics
   -Wall
   -Wextra
@@ -52,7 +52,7 @@ set(COMPILE_OPTIONS
   -Wnull-dereference
   -Wunreachable-code
 )
-target_compile_options(hash PRIVATE ${COMPILE_OPTIONS})
+target_compile_options(hash PRIVATE ${COMPILE_FLAGS})
 target_link_libraries(hash PRIVATE absl::flat_hash_map)
 
 option(HASH_BUILD_TESTS "Build Two_Way tests" ON)
@@ -78,7 +78,7 @@ if(HASH_BUILD_TESTS)
     target_compile_features(tests PRIVATE cxx_std_23)
     target_include_directories(tests PRIVATE src)
     target_link_libraries(tests PRIVATE GTest::gtest_main)
-    target_compile_options(tests PRIVATE ${COMPILE_OPTIONS})
+    target_compile_options(tests PRIVATE ${COMPILE_FLAGS})
 
     add_test(NAME tests COMMAND tests)
 endif()

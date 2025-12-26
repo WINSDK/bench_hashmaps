@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <flat_map>

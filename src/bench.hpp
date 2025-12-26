@@ -33,6 +33,7 @@
 struct BenchResult {
     PerfCounters counter;
     uint64_t sum;
+    uint64_t lookups;
 };
 
 inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
@@ -53,7 +54,7 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
         }
     }
     const auto end = RECORDER.get_counters();
-    return {(end - start) / lookups.size(), sum};
+    return {end - start, sum};
 }
 
 namespace detail {
@@ -92,7 +93,7 @@ inline std::vector<BenchResult> benchmark_boost(
                 return it->second;
             });
 
-        results.emplace_back(counter, sum);
+        results.emplace_back(counter, sum, lookups.size());
     }
 
     return results;
@@ -119,7 +120,7 @@ inline std::vector<BenchResult> benchmark_twoway(
                 return twoway.find(key, steps);
             });
 
-        results.emplace_back(counter, sum);
+        results.emplace_back(counter, sum, lookups.size());
     }
 
     return results;
@@ -149,7 +150,7 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
                 return it->second;
             });
 
-        results.emplace_back(counter, sum);
+        results.emplace_back(counter, sum, lookups.size());
     }
 
     return results;
@@ -179,7 +180,7 @@ inline std::vector<BenchResult> benchmark_std_unordered_map(
                 return it->second;
             });
 
-        results.emplace_back(counter, sum);
+        results.emplace_back(counter, sum, lookups.size());
     }
 
     return results;
@@ -211,7 +212,7 @@ inline std::vector<BenchResult> benchmark_std_flat_map(
                 return it->second;
             });
 
-        results.emplace_back(counter, sum);
+        results.emplace_back(counter, sum, lookups.size());
     }
 
     return results;

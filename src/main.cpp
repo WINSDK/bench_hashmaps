@@ -121,7 +121,10 @@ uint64_t hit_rate_percent(const PerfCounters& counter) {
 }
 
 std::string format_cell(const BenchResult& result) {
-    return std::format("{}/{}", result.counter.cycles, hit_rate_percent(result.counter));
+    const auto cycles_per_lookup = result.lookups == 0
+        ? 0
+        : result.counter.cycles / result.lookups;
+    return std::format("{}/{}", cycles_per_lookup, hit_rate_percent(result.counter));
 }
 
 Table make_table(const BenchSet& set) {

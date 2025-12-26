@@ -1,18 +1,41 @@
-Benchmarking different hashmap implantations.
-Uses macos arm specific performance counters and perf on linux.
+Benchmarking different hashmap implementations.
+Uses macOS ARM performance counters and perf_event on Linux.
+
+Platform: Linux
+Run: ./build/hash (run under sudo on macOS for counters)
 
 How to build:
     cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -S . -B build
     cmake --build build
 
-## Results
+Compiler flags: -O3 -march=native, no LTO
+
+Keys/values: uint64_t keys 1..N, values the same.
+
+Hash functions:
+* boost: boost::hash<uint64_t>
+* twoway: squirrel3 hash
+* absl: absl::Hash<uint64_t>
+* std: std::hash<uint64_t>
+* flat: std::flat_map<uint64_t, uint64_t> (sorted vector)
+
+Capacity/load factor:
+* boost/absl/std reserve(2*N) before inserts (the default).
+* twoway grows as needed from capacity 8.
+* flat stores N sorted pairs (contiguous).
 
 Lookups grouped by N where
 * rows = different hashmap implementation  
-* cols = batch
-* cell = cycles/branch hit rate%
+* cols = batch size (lookups per iteration, to test repeated lookups in a tight loop)
+* cell = cycles per lookup / branch hit rate%
+
+Lookup sets:
+* Spare elements: random uniform lookups
+* Dense set of elements: sequential lookups (keys[i % N]).
+* All lookups are hits.
 
 Tested on:
+* OS: Linux
 * CPU: Intel Core i7-7700 @ 3.60GHz
 * Cores/threads: 4 cores / 8 threads
 * L3 cache: 8 MB

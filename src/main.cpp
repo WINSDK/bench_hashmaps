@@ -1,11 +1,14 @@
 #include <fcntl.h>
 #include <unistd.h>
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <format>
 #include <print>
 #include <random>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -99,55 +102,159 @@ void sink_all(const BenchSet& set) {
     sink_results(set.flat);
 }
 
-void print_table(const char* title, const std::vector<BenchSet>& results) {
-    std::println("{}", title);
-    std::println(
-        "{:>10} {:>6} {:>6} {:>6} {:>6} {:>6} {:>6}",
-        "N",
-        "batch",
-        "boost",
-        "twoway",
-        "absl",
-        "std",
-        "flat");
-    for (const auto& entry : results) {
-        for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
-            const auto batch_size = BATCH_SIZE[idx];
-            std::println(
-                "{:>10} {:>6} {:>6} {:>6} {:>6} {:>6} {:>6}",
-                std::format("1 << {}", entry.shift),
-                batch_size,
-                entry.boost[idx].counter.cycles,
-                entry.twoway[idx].counter.cycles,
-                entry.absl[idx].counter.cycles,
-                entry.std_map[idx].counter.cycles,
-                entry.flat[idx].counter.cycles);
-        }
-    }
+struct Table {
+    std::vector<std::string> headers;
+    std::vector<std::vector<std::string>> rows;
+    std::vector<size_t> widths;
+};
 
-    fflush(stdout);
+struct TableOutput {
+    size_t shift;
+    Table table;
+};
+
+uint64_t hit_rate_percent(const PerfCounters& counter) {
+    if (counter.branches == 0) {
+        return 100;
+    }
+    return 100 - (counter.missed_branches * 100 / counter.branches);
 }
 
-void print_perf_table(
-    const char* title,
-    const char* impl_name,
-    const std::vector<BenchSet>& results,
-    auto member) {
-    std::println("{}", title);
-    std::println("{:>10} {:>6} {}", "N", "batch", impl_name);
-    for (const auto& entry : results) {
-        const auto& impl_results = entry.*member;
-        for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
-            const auto batch_size = BATCH_SIZE[idx];
-            std::println(
-                "{:>10} {:>6} {}",
-                std::format("1 << {}", entry.shift),
-                batch_size,
-                impl_results[idx].counter);
-        }
+std::string format_cell(const BenchResult& result) {
+    return std::format("{}/{}", result.counter.cycles, hit_rate_percent(result.counter));
+}
+
+Table make_table(const BenchSet& set) {
+    Table table;
+    table.headers.emplace_back("kind");
+    for (const auto batch_size : BATCH_SIZE) {
+        table.headers.emplace_back(std::format("{}", batch_size));
     }
 
-    fflush(stdout);
+    struct RowSpec {
+        std::string_view name;
+        const std::vector<BenchResult> BenchSet::*member;
+    };
+    constexpr std::array<RowSpec, 5> kRows{{
+        {"boost", &BenchSet::boost},
+        {"twoway", &BenchSet::twoway},
+        {"absl", &BenchSet::absl},
+        {"std", &BenchSet::std_map},
+        {"flat", &BenchSet::flat},
+    }};
+
+    for (const auto& row_spec : kRows) {
+        const auto& results = set.*(row_spec.member);
+        std::vector<std::string> row;
+        row.reserve(table.headers.size());
+        row.emplace_back(row_spec.name);
+        for (const auto& result : results) {
+            row.emplace_back(format_cell(result));
+        }
+        table.rows.emplace_back(std::move(row));
+    }
+
+    table.widths.assign(table.headers.size(), 0);
+    for (size_t idx = 0; idx < table.headers.size(); idx++) {
+        table.widths[idx] = std::max(table.widths[idx], table.headers[idx].size());
+        for (const auto& row : table.rows) {
+            table.widths[idx] = std::max(table.widths[idx], row[idx].size());
+        }
+        table.widths[idx] += 2; // left + right padding
+    }
+
+    return table;
+}
+
+size_t grid_width(std::span<const size_t> widths) {
+    size_t width = 1;
+    for (const auto column_width : widths) {
+        width += column_width + 1;
+    }
+    return width;
+}
+
+std::string align_cell(std::string_view value, size_t width, bool right_align) {
+    if (value.size() >= width) {
+        return std::string(value);
+    }
+    const auto padding = width - value.size();
+    if (right_align) {
+        return std::string(padding, ' ') + std::string(value);
+    }
+    return std::string(value) + std::string(padding, ' ');
+}
+
+void print_rule(std::span<const size_t> widths) {
+    std::string line;
+    line.reserve(grid_width(widths));
+    for (const auto width : widths) {
+        line.push_back('+');
+        line.append(width, '-');
+    }
+    line.push_back('+');
+    std::println("{}", line);
+}
+
+void print_row(
+    std::span<const size_t> widths,
+    std::span<const uint8_t> right_align,
+    std::span<const std::string> row) {
+    std::string line;
+    line.reserve(grid_width(widths));
+    for (size_t idx = 0; idx < widths.size(); idx++) {
+        const bool align_right = right_align[idx] != 0;
+        line.push_back('|');
+        line.push_back(' ');
+        line += align_cell(row[idx], widths[idx] - 2, align_right);
+        line.push_back(' ');
+    }
+    line.push_back('|');
+    std::println("{}", line);
+}
+
+void print_table(const Table& table) {
+    std::vector<uint8_t> right_align(table.headers.size(), 1);
+    right_align.front() = 0;
+
+    print_rule(std::span<const size_t>{table.widths});
+    print_row(
+        std::span<const size_t>{table.widths},
+        std::span<const uint8_t>{right_align},
+        std::span<const std::string>{table.headers});
+    print_rule(std::span<const size_t>{table.widths});
+    for (const auto& row : table.rows) {
+        print_row(
+            std::span<const size_t>{table.widths},
+            std::span<const uint8_t>{right_align},
+            std::span<const std::string>{row});
+    }
+    print_rule(std::span<const size_t>{table.widths});
+}
+
+void print_section(std::string_view title, std::span<const BenchSet> results) {
+    std::vector<TableOutput> tables;
+    tables.reserve(results.size());
+    size_t max_width = 0;
+    for (const auto& entry : results) {
+        auto table = make_table(entry);
+        max_width = std::max(max_width, grid_width(std::span<const size_t>{table.widths}));
+        tables.push_back({entry.shift, std::move(table)});
+    }
+
+    std::println("{}", std::string(max_width, '-'));
+    std::println();
+    std::println("{:^{}}", title, max_width);
+
+    for (const auto& entry : tables) {
+        std::println();
+        std::println(
+            "{:^{}}",
+            std::format("N = {} (1 << {})", 1ULL << entry.shift, entry.shift),
+            max_width);
+        print_table(entry.table);
+        std::println();
+    }
 }
 } // namespace
 
@@ -175,58 +282,8 @@ int main() {
         dense_results.emplace_back(std::move(dense_set));
     }
 
-    print_perf_table(
-        "lookup performance counters (per lookup): boost",
-        "boost",
-        random_results,
-        &BenchSet::boost);
-    print_perf_table(
-        "lookup performance counters (per lookup): twoway",
-        "twoway",
-        random_results,
-        &BenchSet::twoway);
-    print_perf_table(
-        "lookup performance counters (per lookup): absl",
-        "absl",
-        random_results,
-        &BenchSet::absl);
-    print_perf_table(
-        "lookup performance counters (per lookup): std",
-        "std",
-        random_results,
-        &BenchSet::std_map);
-    print_perf_table(
-        "lookup performance counters (per lookup): flat",
-        "flat",
-        random_results,
-        &BenchSet::flat);
-    print_perf_table(
-        "dense lookup performance counters (per lookup): boost",
-        "boost",
-        dense_results,
-        &BenchSet::boost);
-    print_perf_table(
-        "dense lookup performance counters (per lookup): twoway",
-        "twoway",
-        dense_results,
-        &BenchSet::twoway);
-    print_perf_table(
-        "dense lookup performance counters (per lookup): absl",
-        "absl",
-        dense_results,
-        &BenchSet::absl);
-    print_perf_table(
-        "dense lookup performance counters (per lookup): std",
-        "std",
-        dense_results,
-        &BenchSet::std_map);
-    print_perf_table(
-        "dense lookup performance counters (per lookup): flat",
-        "flat",
-        dense_results,
-        &BenchSet::flat);
-    print_table("lookup performance (in cycles):", random_results);
-    print_table("dense lookup (in cycles):", dense_results);
+    print_section("Spare elements", std::span<const BenchSet>{random_results});
+    print_section("Dense set of elements", std::span<const BenchSet>{dense_results});
 
     return 0;
 }

@@ -71,7 +71,7 @@ struct U64ToU64TableTrait {
 inline std::vector<BenchResult> benchmark_boost(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
-    size_t iterations) {
+    size_t iters) {
     boost::unordered::unordered_flat_map<uint64_t, uint64_t> map{};
     map.reserve(keys.size() * 2);
     for (const auto key : keys) {
@@ -83,10 +83,10 @@ inline std::vector<BenchResult> benchmark_boost(
 
     for (const auto& lookups : lookup_sets) {
         const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iterations;
+        const auto batch_size = lookup_count / iters;
 
         auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
+            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
                 assert(it != map.end());
                 return it->second;
@@ -101,7 +101,7 @@ inline std::vector<BenchResult> benchmark_boost(
 inline std::vector<BenchResult> benchmark_twoway(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
-    size_t iterations) {
+    size_t iters) {
     TwoWay<detail::U64ToU64TableTrait, 4> twoway{};
     for (const auto key : keys) {
         twoway.insert(key, key);
@@ -112,10 +112,10 @@ inline std::vector<BenchResult> benchmark_twoway(
 
     for (const auto& lookups : lookup_sets) {
         const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iterations;
+        const auto batch_size = lookup_count / iters;
 
         auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t* steps) {
+            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t* steps) {
                 return twoway.find(key, steps);
             });
 
@@ -128,7 +128,7 @@ inline std::vector<BenchResult> benchmark_twoway(
 inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
-    size_t iterations) {
+    size_t iters) {
     absl::flat_hash_map<uint64_t, uint64_t> map{};
     map.reserve(keys.size() * 2);
     for (const auto key : keys) {
@@ -140,10 +140,10 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
 
     for (const auto& lookups : lookup_sets) {
         const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iterations;
+        const auto batch_size = lookup_count / iters;
 
         auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
+            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
                 assert(it != map.end());
                 return it->second;
@@ -158,7 +158,7 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
 inline std::vector<BenchResult> benchmark_std_unordered_map(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
-    size_t iterations) {
+    size_t iters) {
     std::unordered_map<uint64_t, uint64_t> map{};
     map.reserve(keys.size() * 2);
     for (const auto key : keys) {
@@ -170,10 +170,10 @@ inline std::vector<BenchResult> benchmark_std_unordered_map(
 
     for (const auto& lookups : lookup_sets) {
         const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iterations;
+        const auto batch_size = lookup_count / iters;
 
         auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
+            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
                 assert(it != map.end());
                 return it->second;
@@ -188,7 +188,7 @@ inline std::vector<BenchResult> benchmark_std_unordered_map(
 inline std::vector<BenchResult> benchmark_std_flat_map(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
-    size_t iterations) {
+    size_t iters) {
     std::vector<std::pair<uint64_t, uint64_t>> items{};
     items.reserve(keys.size());
     for (const auto key : keys) {
@@ -202,10 +202,10 @@ inline std::vector<BenchResult> benchmark_std_flat_map(
 
     for (const auto& lookups : lookup_sets) {
         const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iterations;
+        const auto batch_size = lookup_count / iters;
 
         auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iterations, [&](uint64_t key, uint64_t*) {
+            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
                 const auto it = map.find(key);
                 assert(it != map.end());
                 return it->second;

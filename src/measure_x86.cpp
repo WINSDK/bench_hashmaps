@@ -25,15 +25,6 @@ int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, uns
     return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
 }
 
-bool debug_enabled() {
-    const char* env = std::getenv("PERF_DEBUG");
-    if (!env) {
-        return false;
-    }
-    const std::string_view value{env};
-    return !value.empty() && value != "0";
-}
-
 struct PerfEventGroup {
     static constexpr size_t EVENT_COUNT_FULL = 6;
     std::array<int, EVENT_COUNT_FULL> fds{};
@@ -43,10 +34,8 @@ struct PerfEventGroup {
     PerfEventGroup() {
         fds.fill(-1);
         if (!open_group(true)) {
-            if (debug_enabled()) {
-                std::println(
-                    stderr, "perf: L1D events unavailable, falling back to base counters");
-            }
+            std::println(
+                stderr, "perf: L1D events unavailable, falling back to base counters");
             open_group(false);
         }
     }
@@ -109,13 +98,11 @@ private:
         leader.config = PERF_COUNT_HW_CPU_CYCLES;
         fds[0] = perf_event_open(&leader, 0, -1, -1, 0);
         if (fds[0] < 0) {
-            if (debug_enabled()) {
-                std::println(
-                    stderr,
-                    "perf: perf_event_open failed for cpu-cycles: {} (errno={})",
-                    std::strerror(errno),
-                    errno);
-            }
+            std::println(
+                stderr,
+                "perf: perf_event_open failed for cpu-cycles: {} (errno={})",
+                std::strerror(errno),
+                errno);
             return false;
         }
 
@@ -128,7 +115,7 @@ private:
             attr.exclude_hv = 1;
             attr.config = config;
             const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
-            if (fd < 0 && debug_enabled()) {
+            if (fd < 0) {
                 std::println(
                     stderr,
                     "perf: perf_event_open failed for {}: {} (errno={})",
@@ -149,7 +136,7 @@ private:
                 attr.exclude_hv = 1;
                 attr.config = cache_id | (op << 8) | (result << 16);
                 const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
-                if (fd < 0 && debug_enabled()) {
+                if (fd < 0) {
                     std::println(
                         stderr,
                         "perf: perf_event_open failed for {}: {} (errno={})",
@@ -211,7 +198,7 @@ struct LlcEventGroup {
 
     LlcEventGroup() {
         fds.fill(-1);
-        if (!open_group() && debug_enabled()) {
+        if (!open_group()) {
             std::println(stderr, "perf: LLC events unavailable");
         }
     }
@@ -261,7 +248,7 @@ private:
                 attr.exclude_hv = 1;
                 attr.config = cache_id | (op << 8) | (result << 16);
                 const auto fd = perf_event_open(&attr, 0, -1, fds[0], 0);
-                if (fd < 0 && debug_enabled()) {
+                if (fd < 0) {
                     std::println(
                         stderr,
                         "perf: perf_event_open failed for {}: {} (errno={})",
@@ -285,13 +272,11 @@ private:
             (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16);
         fds[0] = perf_event_open(&leader, 0, -1, -1, 0);
         if (fds[0] < 0) {
-            if (debug_enabled()) {
-                std::println(
-                    stderr,
-                    "perf: perf_event_open failed for llc-read-access: {} (errno={})",
-                    std::strerror(errno),
-                    errno);
-            }
+            std::println(
+                stderr,
+                "perf: perf_event_open failed for llc-read-access: {} (errno={})",
+                std::strerror(errno),
+                errno);
             close_all();
             return false;
         }

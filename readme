@@ -1,7 +1,6 @@
 Benchmarking different hashmap implementations.
 Uses macOS ARM performance counters and perf_event on Linux.
 
-Platform: Linux
 Run: ./build/hash (run under sudo on macOS for counters)
 
 How to build:

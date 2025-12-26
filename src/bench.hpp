@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <flat_map>
@@ -11,7 +10,21 @@
 #include <utility>
 #include <vector>
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#endif
 #include <absl/container/flat_hash_map.h>
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include "TwoWay.hpp"
 #include "boost_unordered.hpp"

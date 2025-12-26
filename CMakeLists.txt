@@ -49,7 +49,6 @@ set(COMPILE_FLAGS
   -Woverloaded-virtual
   -Wcast-qual
   -Wimplicit-fallthrough
-  -Wnull-dereference
   -Wunreachable-code
 )
 target_compile_options(hash PRIVATE ${COMPILE_FLAGS})

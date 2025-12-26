@@ -1,0 +1,2 @@
+Benchmarking different hashmap implantations.
+Uses macos arm specific performance counters.

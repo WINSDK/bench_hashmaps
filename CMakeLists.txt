@@ -18,23 +18,41 @@ FetchContent_MakeAvailable(abseil-cpp)
 add_executable(hash
     src/main.cpp
     src/base.hpp
-    src/bench_common.hpp
-    src/bench_absl.hpp
-    src/bench_absl.cpp
-    src/bench_boost.hpp
-    src/bench_boost.cpp
-    src/bench_std.hpp
-    src/bench_std.cpp
-    src/bench_twoway.hpp
-    src/bench_twoway.cpp
+    src/bench.hpp
     src/TwoWay.hpp
     src/boost_unordered.hpp
-    src/measure.cpp
     src/measure.hpp
 )
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+    set(MEASURE_SRC src/measure_arm.cpp)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i[3-6]86)$")
+    set(MEASURE_SRC src/measure_x86.cpp)
+else()
+    message(FATAL_ERROR "Unsupported processor: ${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+target_sources(hash PRIVATE ${MEASURE_SRC})
+
 target_compile_features(hash PRIVATE cxx_std_23)
-target_compile_options(hash PRIVATE -fcolor-diagnostics -fdeclspec)
+set(COMPILE_OPTIONS
+  -fcolor-diagnostics
+  -Wall
+  -Wextra
+  -Wconversion
+  -Wsign-conversion
+  -Wshadow
+  -Wdouble-promotion
+  -Wformat=2
+  -Wundef
+  -Wnon-virtual-dtor
+  -Woverloaded-virtual
+  -Wcast-qual
+  -Wimplicit-fallthrough
+  -Wnull-dereference
+  -Wunreachable-code
+)
+target_compile_options(hash PRIVATE ${COMPILE_OPTIONS})
 target_link_libraries(hash PRIVATE absl::flat_hash_map)
 
 option(HASH_BUILD_TESTS "Build Two_Way tests" ON)
@@ -60,7 +78,7 @@ if(HASH_BUILD_TESTS)
     target_compile_features(tests PRIVATE cxx_std_23)
     target_include_directories(tests PRIVATE src)
     target_link_libraries(tests PRIVATE GTest::gtest_main)
-    target_compile_options(tests PRIVATE -fcolor-diagnostics)
+    target_compile_options(tests PRIVATE ${COMPILE_OPTIONS})
 
     add_test(NAME tests COMMAND tests)
 endif()

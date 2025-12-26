@@ -82,6 +82,14 @@ typedef size_t usize;
 #define KPC_PMU_INTEL_V2 (3) // Old Intel
 #define KPC_PMU_ARM_V2 (4) // Old ARM
 
+// The maximum number of counters we could read from every class in one go.
+// ARMV7: FIXED: 1, CONFIGURABLE: 4
+// ARM32: FIXED: 2, CONFIGURABLE: 6
+// ARM64: FIXED: 2, CONFIGURABLE: CORE_NCTRS - FIXED (6 or 8)
+// x86: 32
+#define KPC_MAX_COUNTERS 32
+
+
 // Bits for defining what to do on an action.
 // Defined in https://github.com/apple/darwin-xnu/blob/main/osfmk/kperf/action.h
 #define KPERF_SAMPLER_TH_INFO (1U << 0)
@@ -805,7 +813,17 @@ static kpep_event* get_event(kpep_db* db, const event_alias* alias) {
 
 static constexpr size_t EV_COUNT = sizeof(profile_events) / sizeof(profile_events[0]);
 
-EventRecorder::EventRecorder() {
+struct ArmRecorder {
+    uint64_t regs[KPC_MAX_COUNTERS] = {0};
+    size_t counter_map[KPC_MAX_COUNTERS] = {0};
+    uint64_t counters_0[KPC_MAX_COUNTERS] = {0};
+    uint64_t counters_1[KPC_MAX_COUNTERS] = {0};
+
+    explicit ArmRecorder();
+    PerfCounters get_counters();
+};
+
+ArmRecorder::ArmRecorder() {
     // load dylib
     if (!lib_init()) {
         printf("Error: %s\n", lib_err_msg);
@@ -904,7 +922,7 @@ EventRecorder::EventRecorder() {
     }
 }
 
-PerfCounters EventRecorder::get_counters() {
+PerfCounters ArmRecorder::get_counters() {
     static bool warned = false;
     int ret;
     // get counters before
@@ -913,7 +931,7 @@ PerfCounters EventRecorder::get_counters() {
             printf("Failed get thread counters before: %d.\n", ret);
             warned = true;
         }
-        return 1;
+        return PerfCounters{};
     }
     return PerfCounters{
         counters_0[counter_map[0]],
@@ -922,4 +940,9 @@ PerfCounters EventRecorder::get_counters() {
         counters_0[counter_map[1]]};
 }
 
-EventRecorder RECORDER{};
+PerfCounters PerfRecorder::get_counters() const {
+    static ArmRecorder instance{};
+    return instance.get_counters();
+}
+
+PerfRecorder RECORDER{};

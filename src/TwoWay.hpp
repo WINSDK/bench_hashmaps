@@ -25,7 +25,7 @@ struct TwoWay {
 
     static constexpr Key EMPTY = std::numeric_limits<Key>::max();
 
-    TwoWay() : size_(0), capacity(8) {
+    TwoWay() : capacity(8), size_(0) {
         data = reinterpret_cast<Slot*>(__aligned_alloc(CACHE_LINE, sizeof(Slot) * capacity));
         fill_empty(data, capacity);
     }

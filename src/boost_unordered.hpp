@@ -76,6 +76,7 @@
 #endif
 #endif
 
+
 #ifndef BOOST_FORCEINLINE
 #ifdef _MSC_VER
 #define BOOST_FORCEINLINE __forceinline
@@ -143,14 +144,15 @@
 #define BOOST_NORETURN
 #endif
 
-#if BOOST_MSVC
+#ifdef BOOST_MSVC
 #if !defined(_CPPUNWIND) && !defined(BOOST_NO_EXCEPTIONS)
 #define BOOST_NO_EXCEPTIONS
 #endif
 #if !defined(_CPPRTTI) && !defined(BOOST_NO_RTTI)
 #define BOOST_NO_RTTI
 #endif
-#elif BOOST_GCC
+#endif
+#ifdef BOOST_GCC
 #if !defined(__EXCEPTIONS) && !defined(BOOST_NO_EXCEPTIONS)
 #define BOOST_NO_EXCEPTIONS
 #endif
@@ -1464,16 +1466,7 @@ namespace boost {
         typename std::pair<iter_key_t<T> const, iter_val_t<T> >;
 #endif
 
-#if BOOST_CXX_VERSION < 201703L
-      template <class T>
-      constexpr typename std::add_const<T>::type& as_const(T& t) noexcept
-      {
-        return t;
-      }
-      template <class T> void as_const(const T&&) = delete;
-#else
       using std::as_const;
-#endif
     } // namespace detail
   } // namespace unordered
 } // namespace boost

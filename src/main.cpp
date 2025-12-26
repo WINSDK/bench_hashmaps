@@ -2,16 +2,14 @@
 #include <unistd.h>
 #include <array>
 #include <cstdint>
+#include <format>
 #include <print>
 #include <random>
 #include <span>
 #include <utility>
 #include <vector>
 
-#include "bench_absl.hpp"
-#include "bench_boost.hpp"
-#include "bench_std.hpp"
-#include "bench_twoway.hpp"
+#include "bench.hpp"
 
 constexpr auto ITERS = 100'000ULL;
 constexpr std::array<size_t, 8> BATCH_SIZE{1, 2, 4, 8, 16, 32, 64, 128};
@@ -116,16 +114,18 @@ void print_table(const char* title, const std::vector<BenchSet>& results) {
         for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
             const auto batch_size = BATCH_SIZE[idx];
             std::println(
-                "{:>10} {:>6} {:>10.2f} {:>10.2f} {:>10.2f} {:>10.2f} {:>10.2f}",
+                "{:>10} {:>6} {:>10} {:>10} {:>10} {:>10} {:>10}",
                 std::format("1 << {}", entry.shift),
                 batch_size,
-                entry.boost[idx].ticks_per_lookup,
-                entry.twoway[idx].ticks_per_lookup,
-                entry.absl[idx].ticks_per_lookup,
-                entry.std_map[idx].ticks_per_lookup,
-                entry.flat[idx].ticks_per_lookup);
+                entry.boost[idx].avg_counter.cycles,
+                entry.twoway[idx].avg_counter.cycles,
+                entry.absl[idx].avg_counter.cycles,
+                entry.std_map[idx].avg_counter.cycles,
+                entry.flat[idx].avg_counter.cycles);
         }
     }
+
+    fflush(stdout);
 }
 } // namespace
 

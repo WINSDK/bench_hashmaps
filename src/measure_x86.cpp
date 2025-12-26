@@ -33,7 +33,7 @@ bool debug_enabled() {
 }
 
 struct PerfEventGroup {
-    static constexpr size_t EVENT_COUNT_FULL = 8;
+    static constexpr size_t EVENT_COUNT_FULL = 6;
     std::array<int, EVENT_COUNT_FULL> fds{};
     size_t event_count = 0;
     bool ok = false;
@@ -91,8 +91,6 @@ struct PerfEventGroup {
         if (event_count == EVENT_COUNT_FULL) {
             counters.l1d_accesses = scaled_value(4);
             counters.l1d_misses = scaled_value(5);
-            counters.llc_accesses = scaled_value(6);
-            counters.llc_misses = scaled_value(7);
         }
 
         return counters;
@@ -183,20 +181,11 @@ private:
                 PERF_COUNT_HW_CACHE_OP_READ,
                 PERF_COUNT_HW_CACHE_RESULT_MISS,
                 "l1d-read-miss");
-            fds[6] = open_member_cache(
-                PERF_COUNT_HW_CACHE_LL,
-                PERF_COUNT_HW_CACHE_OP_READ,
-                PERF_COUNT_HW_CACHE_RESULT_ACCESS,
-                "llc-read-access");
-            fds[7] = open_member_cache(
-                PERF_COUNT_HW_CACHE_LL,
-                PERF_COUNT_HW_CACHE_OP_READ,
-                PERF_COUNT_HW_CACHE_RESULT_MISS,
-                "llc-read-miss");
-            if (fds[4] < 0 || fds[5] < 0 || fds[6] < 0 || fds[7] < 0) {
+            if (fds[4] < 0 || fds[5] < 0) {
                 close_all();
                 return false;
             }
+
             event_count = EVENT_COUNT_FULL;
         } else {
             event_count = 4;

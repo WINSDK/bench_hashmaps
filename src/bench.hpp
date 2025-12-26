@@ -16,7 +16,7 @@
 #include "measure.hpp"
 
 struct BenchResult {
-    PerfCounters avg_counter;
+    PerfCounters counter;
     uint64_t sum;
 };
 
@@ -38,15 +38,10 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
         }
     }
     const auto end = RECORDER.get_counters();
-    return {(end - start) / (iters * batch_size), sum};
+    return {(end - start) / lookups.size(), sum};
 }
 
-inline uint64_t ticks_per_lookup(const PerfCounters& counters, size_t lookup_count) {
-    return static_cast<uint64_t>(
-        static_cast<double>(counters.cycles) / static_cast<double>(lookup_count));
-}
-
-namespace bench_detail {
+namespace detail {
 struct U64ToU64TableTrait {
     using Key = uint64_t;
     using Value = uint64_t;
@@ -55,7 +50,7 @@ struct U64ToU64TableTrait {
         return squirrel3(key);
     }
 };
-} // namespace bench_detail
+} // namespace detail
 
 inline std::vector<BenchResult> benchmark_boost(
     std::span<const uint64_t> keys,
@@ -80,7 +75,7 @@ inline std::vector<BenchResult> benchmark_boost(
                 return it->second;
             });
 
-        results.emplace_back(counter / lookup_count, sum);
+        results.emplace_back(counter, sum);
     }
 
     return results;
@@ -90,7 +85,7 @@ inline std::vector<BenchResult> benchmark_twoway(
     std::span<const uint64_t> keys,
     std::span<const std::vector<uint64_t>> lookup_sets,
     size_t iterations) {
-    TwoWay<bench_detail::U64ToU64TableTrait, 4> twoway{};
+    TwoWay<detail::U64ToU64TableTrait, 4> twoway{};
     for (const auto key : keys) {
         twoway.insert(key, key);
     }
@@ -107,7 +102,7 @@ inline std::vector<BenchResult> benchmark_twoway(
                 return twoway.find(key, steps);
             });
 
-        results.emplace_back(counter / lookup_count, sum);
+        results.emplace_back(counter, sum);
     }
 
     return results;
@@ -136,7 +131,7 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
                 return it->second;
             });
 
-        results.emplace_back(counter / lookup_count, sum);
+        results.emplace_back(counter, sum);
     }
 
     return results;
@@ -165,7 +160,7 @@ inline std::vector<BenchResult> benchmark_std_unordered_map(
                 return it->second;
             });
 
-        results.emplace_back(counter / lookup_count, sum);
+        results.emplace_back(counter, sum);
     }
 
     return results;
@@ -196,7 +191,7 @@ inline std::vector<BenchResult> benchmark_std_flat_map(
                 return it->second;
             });
 
-        results.emplace_back(counter / lookup_count, sum);
+        results.emplace_back(counter, sum);
     }
 
     return results;

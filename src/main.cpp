@@ -102,7 +102,7 @@ void sink_all(const BenchSet& set) {
 void print_table(const char* title, const std::vector<BenchSet>& results) {
     std::println("{}", title);
     std::println(
-        "{:>10} {:>6} {:>10} {:>10} {:>10} {:>10} {:>10}",
+        "{:>10} {:>6} {:>6} {:>6} {:>6} {:>6} {:>6}",
         "N",
         "batch",
         "boost",
@@ -114,14 +114,36 @@ void print_table(const char* title, const std::vector<BenchSet>& results) {
         for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
             const auto batch_size = BATCH_SIZE[idx];
             std::println(
-                "{:>10} {:>6} {:>10} {:>10} {:>10} {:>10} {:>10}",
+                "{:>10} {:>6} {:>6} {:>6} {:>6} {:>6} {:>6}",
                 std::format("1 << {}", entry.shift),
                 batch_size,
-                entry.boost[idx].avg_counter.cycles,
-                entry.twoway[idx].avg_counter.cycles,
-                entry.absl[idx].avg_counter.cycles,
-                entry.std_map[idx].avg_counter.cycles,
-                entry.flat[idx].avg_counter.cycles);
+                entry.boost[idx].counter.cycles,
+                entry.twoway[idx].counter.cycles,
+                entry.absl[idx].counter.cycles,
+                entry.std_map[idx].counter.cycles,
+                entry.flat[idx].counter.cycles);
+        }
+    }
+
+    fflush(stdout);
+}
+
+void print_perf_table(
+    const char* title,
+    const char* impl_name,
+    const std::vector<BenchSet>& results,
+    auto member) {
+    std::println("{}", title);
+    std::println("{:>10} {:>6} {}", "N", "batch", impl_name);
+    for (const auto& entry : results) {
+        const auto& impl_results = entry.*member;
+        for (size_t idx = 0; idx < BATCH_SIZE.size(); idx++) {
+            const auto batch_size = BATCH_SIZE[idx];
+            std::println(
+                "{:>10} {:>6} {}",
+                std::format("1 << {}", entry.shift),
+                batch_size,
+                impl_results[idx].counter);
         }
     }
 
@@ -153,6 +175,56 @@ int main() {
         dense_results.emplace_back(std::move(dense_set));
     }
 
+    print_perf_table(
+        "lookup performance counters (per lookup): boost",
+        "boost",
+        random_results,
+        &BenchSet::boost);
+    print_perf_table(
+        "lookup performance counters (per lookup): twoway",
+        "twoway",
+        random_results,
+        &BenchSet::twoway);
+    print_perf_table(
+        "lookup performance counters (per lookup): absl",
+        "absl",
+        random_results,
+        &BenchSet::absl);
+    print_perf_table(
+        "lookup performance counters (per lookup): std",
+        "std",
+        random_results,
+        &BenchSet::std_map);
+    print_perf_table(
+        "lookup performance counters (per lookup): flat",
+        "flat",
+        random_results,
+        &BenchSet::flat);
+    print_perf_table(
+        "dense lookup performance counters (per lookup): boost",
+        "boost",
+        dense_results,
+        &BenchSet::boost);
+    print_perf_table(
+        "dense lookup performance counters (per lookup): twoway",
+        "twoway",
+        dense_results,
+        &BenchSet::twoway);
+    print_perf_table(
+        "dense lookup performance counters (per lookup): absl",
+        "absl",
+        dense_results,
+        &BenchSet::absl);
+    print_perf_table(
+        "dense lookup performance counters (per lookup): std",
+        "std",
+        dense_results,
+        &BenchSet::std_map);
+    print_perf_table(
+        "dense lookup performance counters (per lookup): flat",
+        "flat",
+        dense_results,
+        &BenchSet::flat);
     print_table("lookup performance (in cycles):", random_results);
     print_table("dense lookup (in cycles):", dense_results);
 

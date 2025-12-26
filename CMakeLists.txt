@@ -51,6 +51,11 @@ set(COMPILE_FLAGS
   -Wimplicit-fallthrough
   -Wunreachable-code
 )
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  list(APPEND COMPILE_FLAGS -march=native)
+endif()
+
 target_compile_options(hash PRIVATE ${COMPILE_FLAGS})
 target_link_libraries(hash PRIVATE absl::flat_hash_map)
 

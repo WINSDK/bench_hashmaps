@@ -58,9 +58,11 @@ protected:
     }
 };
 
-struct PerfEventGroup : PerfEventGroupBase<4> {
-    static constexpr size_t EVENT_COUNT = 4;
+static constexpr size_t BASE_EVENT_COUNT = 4;
+static constexpr size_t L1D_EVENT_COUNT = 2;
+static constexpr size_t LLC_EVENT_COUNT = 2;
 
+struct PerfEventGroup : PerfEventGroupBase<BASE_EVENT_COUNT> {
     PerfEventGroup() {
         ok = open_group();
     }
@@ -70,11 +72,11 @@ struct PerfEventGroup : PerfEventGroupBase<4> {
             return PerfCounters{};
         }
 
-        std::array<uint64_t, 3 + EVENT_COUNT> data{};
-        const size_t expected_words = 3 + EVENT_COUNT;
+        std::array<uint64_t, 3 + BASE_EVENT_COUNT> data{};
+        const size_t expected_words = 3 + BASE_EVENT_COUNT;
         const size_t expected_bytes = expected_words * sizeof(uint64_t);
         const auto res = ::read(fds[0], data.data(), data.size() * sizeof(uint64_t));
-        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < EVENT_COUNT) {
+        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < BASE_EVENT_COUNT) {
             return PerfCounters{};
         }
 
@@ -150,9 +152,7 @@ struct CacheCounters {
     uint64_t time_running = 0;
 };
 
-struct L1dEventGroup : PerfEventGroupBase<L1dEventGroup::EVENT_COUNT> {
-    static constexpr size_t EVENT_COUNT = 2;
-
+struct L1dEventGroup : PerfEventGroupBase<L1D_EVENT_COUNT> {
     L1dEventGroup() {
         if (!open_group()) {
             std::println(stderr, "perf: L1D events unavailable");
@@ -164,10 +164,10 @@ struct L1dEventGroup : PerfEventGroupBase<L1dEventGroup::EVENT_COUNT> {
             return {};
         }
 
-        std::array<uint64_t, 3 + EVENT_COUNT> data{};
+        std::array<uint64_t, 3 + L1D_EVENT_COUNT> data{};
         const size_t expected_bytes = data.size() * sizeof(uint64_t);
         const auto res = ::read(fds[0], data.data(), expected_bytes);
-        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < EVENT_COUNT) {
+        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < L1D_EVENT_COUNT) {
             return {};
         }
 
@@ -239,9 +239,7 @@ private:
     }
 };
 
-struct LlcEventGroup : PerfEventGroupBase<LlcEventGroup::EVENT_COUNT> {
-    static constexpr size_t EVENT_COUNT = 2;
-
+struct LlcEventGroup : PerfEventGroupBase<LLC_EVENT_COUNT> {
     LlcEventGroup() {
         if (!open_group()) {
             std::println(stderr, "perf: LLC events unavailable");
@@ -253,10 +251,10 @@ struct LlcEventGroup : PerfEventGroupBase<LlcEventGroup::EVENT_COUNT> {
             return {};
         }
 
-        std::array<uint64_t, 3 + EVENT_COUNT> data{};
+        std::array<uint64_t, 3 + LLC_EVENT_COUNT> data{};
         const size_t expected_bytes = data.size() * sizeof(uint64_t);
         const auto res = ::read(fds[0], data.data(), expected_bytes);
-        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < EVENT_COUNT) {
+        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < LLC_EVENT_COUNT) {
             return {};
         }
 

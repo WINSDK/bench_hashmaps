@@ -940,9 +940,18 @@ PerfCounters ArmRecorder::get_counters() {
         counters_0[counter_map[1]]};
 }
 
-PerfCounters PerfRecorder::get_counters() const {
+static ArmRecorder& recorder_instance() {
     static ArmRecorder instance{};
-    return instance.get_counters();
+    return instance;
+}
+
+PerfCounters PerfRecorder::get_counters(PerfCounterSet) const {
+    return recorder_instance().get_counters();
+}
+
+void PerfRecorder::enable(PerfCounterSet) const {}
+
+void PerfRecorder::disable_all() const {}
 }
 
 PerfRecorder RECORDER{};

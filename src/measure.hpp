@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <format>
 
 struct PerfCounters {
@@ -200,8 +201,15 @@ struct std::formatter<PerfCounters> : std::formatter<uint64_t> {
     }
 };
 
+enum class PerfCounterSet : uint8_t {
+    core,
+    cache,
+};
+
 struct PerfRecorder {
-    PerfCounters get_counters() const;
+    PerfCounters get_counters(PerfCounterSet set) const;
+    void enable(PerfCounterSet set) const;
+    void disable_all() const;
 };
 
 extern PerfRecorder RECORDER;

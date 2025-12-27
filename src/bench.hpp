@@ -43,6 +43,7 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
     size_t batch_size,
     size_t iters,
     auto&& lookup_fn,
+    PerfCounterSet counter_set,
     size_t warmup_iters = 1) {
     uint64_t sum = 0;
     uint64_t steps = 0;
@@ -62,7 +63,9 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
         }
     }
 
-    const auto start = RECORDER.get_counters();
+    RECORDER.disable_all();
+    RECORDER.enable(counter_set);
+    const auto start = RECORDER.get_counters(counter_set);
     for (size_t iter = 0; iter < iters; iter++) {
         const auto* batch = &lookups[offset];
         offset += batch_size;
@@ -70,8 +73,32 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
             sum += lookup_fn(batch[i], &steps);
         }
     }
-    const auto end = RECORDER.get_counters();
+    const auto end = RECORDER.get_counters(counter_set);
+    RECORDER.disable_all();
     return {end - start, sum};
+}
+
+inline BenchResult benchmark_split(
+    std::span<const uint64_t> lookups,
+    size_t iters,
+    auto&& lookup_fn) {
+    const auto batch_size = lookups.size() / iters;
+    auto [counter, sum] =
+        benchmark_batch(lookups, batch_size, iters, lookup_fn, PerfCounterSet::core);
+#if defined(__linux__)
+    auto [cache_counter, cache_sum] =
+        benchmark_batch(lookups, batch_size, iters, lookup_fn, PerfCounterSet::cache);
+    counter.l1d_accesses = cache_counter.l1d_accesses;
+    counter.l1d_misses = cache_counter.l1d_misses;
+    counter.l1d_time_enabled = cache_counter.l1d_time_enabled;
+    counter.l1d_time_running = cache_counter.l1d_time_running;
+    counter.llc_accesses = cache_counter.llc_accesses;
+    counter.llc_misses = cache_counter.llc_misses;
+    counter.llc_time_enabled = cache_counter.llc_time_enabled;
+    counter.llc_time_running = cache_counter.llc_time_running;
+    sum += cache_sum;
+#endif
+    return {counter, sum, lookups.size()};
 }
 
 namespace detail {
@@ -100,17 +127,11 @@ inline std::vector<BenchResult> benchmark_boost(
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {
-        const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iters;
-
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
-                const auto it = map.find(key);
-                assert(it != map.end());
-                return it->second;
-            });
-
-        results.emplace_back(counter, sum, lookups.size());
+        results.emplace_back(benchmark_split(lookups, iters, [&](uint64_t key, uint64_t*) {
+            const auto it = map.find(key);
+            assert(it != map.end());
+            return it->second;
+        }));
     }
 
     return results;
@@ -129,15 +150,9 @@ inline std::vector<BenchResult> benchmark_twoway(
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {
-        const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iters;
-
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t* steps) {
-                return twoway.find(key, steps);
-            });
-
-        results.emplace_back(counter, sum, lookups.size());
+        results.emplace_back(benchmark_split(lookups, iters, [&](uint64_t key, uint64_t* steps) {
+            return twoway.find(key, steps);
+        }));
     }
 
     return results;
@@ -157,17 +172,11 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {
-        const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iters;
-
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
-                const auto it = map.find(key);
-                assert(it != map.end());
-                return it->second;
-            });
-
-        results.emplace_back(counter, sum, lookups.size());
+        results.emplace_back(benchmark_split(lookups, iters, [&](uint64_t key, uint64_t*) {
+            const auto it = map.find(key);
+            assert(it != map.end());
+            return it->second;
+        }));
     }
 
     return results;
@@ -187,17 +196,11 @@ inline std::vector<BenchResult> benchmark_dynamic_fph_map(
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {
-        const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iters;
-
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
-                const auto it = map.find(key);
-                assert(it != map.end());
-                return it->second;
-            });
-
-        results.emplace_back(counter, sum, lookups.size());
+        results.emplace_back(benchmark_split(lookups, iters, [&](uint64_t key, uint64_t*) {
+            const auto it = map.find(key);
+            assert(it != map.end());
+            return it->second;
+        }));
     }
 
     return results;
@@ -217,17 +220,11 @@ inline std::vector<BenchResult> benchmark_std_unordered_map(
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {
-        const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iters;
-
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
-                const auto it = map.find(key);
-                assert(it != map.end());
-                return it->second;
-            });
-
-        results.emplace_back(counter, sum, lookups.size());
+        results.emplace_back(benchmark_split(lookups, iters, [&](uint64_t key, uint64_t*) {
+            const auto it = map.find(key);
+            assert(it != map.end());
+            return it->second;
+        }));
     }
 
     return results;
@@ -249,17 +246,11 @@ inline std::vector<BenchResult> benchmark_std_flat_map(
     results.reserve(lookup_sets.size());
 
     for (const auto& lookups : lookup_sets) {
-        const auto lookup_count = lookups.size();
-        const auto batch_size = lookup_count / iters;
-
-        auto [counter, sum] =
-            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
-                const auto it = map.find(key);
-                assert(it != map.end());
-                return it->second;
-            });
-
-        results.emplace_back(counter, sum, lookups.size());
+        results.emplace_back(benchmark_split(lookups, iters, [&](uint64_t key, uint64_t*) {
+            const auto it = map.find(key);
+            assert(it != map.end());
+            return it->second;
+        }));
     }
 
     return results;

@@ -2,6 +2,7 @@
 #include <cstdint>
 
 #include <linux/perf_event.h>
+#include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <array>
@@ -13,48 +14,68 @@
 
 #include "measure.hpp"
 
-uint64_t read_tsc() {
-    _mm_lfence();
-    uint64_t tsc = __rdtsc();
-    _mm_lfence();
-    return tsc;
-}
-
 int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, unsigned long flags) {
     long res = syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
     return static_cast<int>(res);
 }
 
-struct PerfEventGroup {
-    static constexpr size_t EVENT_COUNT_CORE = 4;
-    std::array<int, EVENT_COUNT_CORE> fds{};
+template <size_t EventCount>
+struct PerfEventGroupBase {
+    std::array<int, EventCount> fds{};
     bool ok = false;
 
-    PerfEventGroup() {
+    PerfEventGroupBase() {
         fds.fill(-1);
-        ok = open_group();
     }
 
-    ~PerfEventGroup() {
-        for (auto fd : fds) {
+    ~PerfEventGroupBase() {
+        close_all();
+    }
+
+    void enable() const {
+        if (!ok) {
+            return;
+        }
+        ioctl(fds[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+    }
+
+    void disable() const {
+        if (!ok) {
+            return;
+        }
+        ioctl(fds[0], PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
+    }
+
+protected:
+    void close_all() {
+        for (auto& fd : fds) {
             if (fd != -1) {
                 close(fd);
-                fd = -1;
             }
+            fd = -1;
         }
+        ok = false;
+    }
+};
+
+struct PerfEventGroup : PerfEventGroupBase<4> {
+    static constexpr size_t EVENT_COUNT = 4;
+
+    PerfEventGroup() {
+        ok = open_group();
     }
 
     PerfCounters read() const {
         if (!ok) {
-            return PerfCounters{read_tsc(), 0, 0, 0};
+            return PerfCounters{};
         }
 
-        std::array<uint64_t, 3 + EVENT_COUNT_CORE> data{};
-        const size_t expected_words = 3 + EVENT_COUNT_CORE;
+        std::array<uint64_t, 3 + EVENT_COUNT> data{};
+        const size_t expected_words = 3 + EVENT_COUNT;
         const size_t expected_bytes = expected_words * sizeof(uint64_t);
         const auto res = ::read(fds[0], data.data(), data.size() * sizeof(uint64_t));
-        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < EVENT_COUNT_CORE) {
-            return PerfCounters{read_tsc(), 0, 0, 0};
+        if (res < static_cast<ssize_t>(expected_bytes) || data[0] < EVENT_COUNT) {
+            return PerfCounters{};
         }
 
         PerfCounters counters{};
@@ -73,7 +94,7 @@ private:
         perf_event_attr leader{};
         leader.type = PERF_TYPE_HARDWARE;
         leader.size = sizeof(leader);
-        leader.disabled = 0;
+        leader.disabled = 1;
         leader.exclude_kernel = 1;
         leader.exclude_hv = 1;
         leader.read_format =
@@ -120,16 +141,6 @@ private:
         ok = true;
         return true;
     }
-
-    void close_all() {
-        for (auto& fd : fds) {
-            if (fd != -1) {
-                close(fd);
-            }
-            fd = -1;
-        }
-        ok = false;
-    }
 };
 
 struct CacheCounters {
@@ -139,24 +150,12 @@ struct CacheCounters {
     uint64_t time_running = 0;
 };
 
-struct L1dEventGroup {
+struct L1dEventGroup : PerfEventGroupBase<L1dEventGroup::EVENT_COUNT> {
     static constexpr size_t EVENT_COUNT = 2;
-    std::array<int, EVENT_COUNT> fds{};
-    bool ok = false;
 
     L1dEventGroup() {
-        fds.fill(-1);
         if (!open_group()) {
             std::println(stderr, "perf: L1D events unavailable");
-        }
-    }
-
-    ~L1dEventGroup() {
-        for (auto fd : fds) {
-            if (fd != -1) {
-                close(fd);
-                fd = -1;
-            }
         }
     }
 
@@ -206,7 +205,7 @@ private:
         perf_event_attr leader{};
         leader.type = PERF_TYPE_HW_CACHE;
         leader.size = sizeof(leader);
-        leader.disabled = 0;
+        leader.disabled = 1;
         leader.exclude_kernel = 1;
         leader.exclude_hv = 1;
         leader.read_format =
@@ -238,36 +237,14 @@ private:
         ok = true;
         return true;
     }
-
-    void close_all() {
-        for (auto& fd : fds) {
-            if (fd != -1) {
-                close(fd);
-            }
-            fd = -1;
-        }
-        ok = false;
-    }
 };
 
-struct LlcEventGroup {
+struct LlcEventGroup : PerfEventGroupBase<LlcEventGroup::EVENT_COUNT> {
     static constexpr size_t EVENT_COUNT = 2;
-    std::array<int, EVENT_COUNT> fds{};
-    bool ok = false;
 
     LlcEventGroup() {
-        fds.fill(-1);
         if (!open_group()) {
             std::println(stderr, "perf: LLC events unavailable");
-        }
-    }
-
-    ~LlcEventGroup() {
-        for (auto fd : fds) {
-            if (fd != -1) {
-                close(fd);
-                fd = -1;
-            }
         }
     }
 
@@ -317,7 +294,7 @@ private:
         perf_event_attr leader{};
         leader.type = PERF_TYPE_HW_CACHE;
         leader.size = sizeof(leader);
-        leader.disabled = 0;
+        leader.disabled = 1;
         leader.exclude_kernel = 1;
         leader.exclude_hv = 1;
         leader.read_format =
@@ -349,41 +326,64 @@ private:
         ok = true;
         return true;
     }
-
-    void close_all() {
-        for (auto& fd : fds) {
-            if (fd != -1) {
-                close(fd);
-            }
-            fd = -1;
-        }
-        ok = false;
-    }
 };
 
 struct X86Recorder {
-    PerfCounters get_counters() const {
-        static PerfEventGroup group{};
-        static L1dEventGroup l1d_group{};
-        static LlcEventGroup llc_group{};
-        auto counters = group.read();
-        const auto l1d = l1d_group.read();
-        const auto llc = llc_group.read();
-        counters.l1d_accesses = l1d.accesses;
-        counters.l1d_misses = l1d.misses;
-        counters.l1d_time_enabled = l1d.time_enabled;
-        counters.l1d_time_running = l1d.time_running;
-        counters.llc_accesses = llc.accesses;
-        counters.llc_misses = llc.misses;
-        counters.llc_time_enabled = llc.time_enabled;
-        counters.llc_time_running = llc.time_running;
+    PerfEventGroup core{};
+    L1dEventGroup l1d{};
+    LlcEventGroup llc{};
+
+    void enable(PerfCounterSet set) {
+        disable_all();
+        if (set == PerfCounterSet::core) {
+            core.enable();
+            return;
+        }
+        l1d.enable();
+        llc.enable();
+    }
+
+    void disable_all() {
+        core.disable();
+        l1d.disable();
+        llc.disable();
+    }
+
+    PerfCounters get_counters(PerfCounterSet set) const {
+        if (set == PerfCounterSet::core) {
+            return core.read();
+        }
+
+        PerfCounters counters{};
+        const auto l1d_counters = l1d.read();
+        const auto llc_counters = llc.read();
+        counters.l1d_accesses = l1d_counters.accesses;
+        counters.l1d_misses = l1d_counters.misses;
+        counters.l1d_time_enabled = l1d_counters.time_enabled;
+        counters.l1d_time_running = l1d_counters.time_running;
+        counters.llc_accesses = llc_counters.accesses;
+        counters.llc_misses = llc_counters.misses;
+        counters.llc_time_enabled = llc_counters.time_enabled;
+        counters.llc_time_running = llc_counters.time_running;
         return counters;
     }
 };
 
-PerfCounters PerfRecorder::get_counters() const {
+static X86Recorder& recorder_instance() {
     static X86Recorder instance{};
-    return instance.get_counters();
+    return instance;
+}
+
+PerfCounters PerfRecorder::get_counters(PerfCounterSet set) const {
+    return recorder_instance().get_counters(set);
+}
+
+void PerfRecorder::enable(PerfCounterSet set) const {
+    recorder_instance().enable(set);
+}
+
+void PerfRecorder::disable_all() const {
+    recorder_instance().disable_all();
 }
 
 PerfRecorder RECORDER{};

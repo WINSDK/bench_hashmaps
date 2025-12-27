@@ -2637,10 +2637,10 @@ namespace fph {
                 return {iterator(slot_address, this), alloc_happen};
             }
 
-            template<int K, typename... Ts> using KthTypeOf =
+            template<size_t K, typename... Ts> using KthTypeOf =
             typename std::tuple_element<K, std::tuple<Ts...>>::type;
 
-            template <int K, class... Ts>
+            template <size_t K, class... Ts>
             constexpr static auto GetTupleElement(Ts&&... ts) {
                 return std::get<K>(std::forward_as_tuple(ts...));
             }

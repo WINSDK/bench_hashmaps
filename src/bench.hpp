@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -41,10 +42,25 @@ inline std::tuple<PerfCounters, uint64_t> benchmark_batch(
     std::span<const uint64_t> lookups,
     size_t batch_size,
     size_t iters,
-    auto&& lookup_fn) {
+    auto&& lookup_fn,
+    size_t warmup_iters = 1) {
     uint64_t sum = 0;
     uint64_t steps = 0;
     size_t offset = 0;
+
+    if (warmup_iters > 0) {
+        size_t warmup_rounds = std::min(warmup_iters, iters);
+        size_t warmup_offset = 0;
+        volatile uint64_t warmup_sum = 0;
+        uint64_t warmup_steps = 0;
+        for (size_t iter = 0; iter < warmup_rounds; iter++) {
+            const auto* batch = &lookups[warmup_offset];
+            warmup_offset += batch_size;
+            for (size_t i = 0; i < batch_size; i++) {
+                warmup_sum += lookup_fn(batch[i], &warmup_steps);
+            }
+        }
+    }
 
     const auto start = RECORDER.get_counters();
     for (size_t iter = 0; iter < iters; iter++) {

@@ -7,6 +7,7 @@
 #include <array>
 #include <cerrno>
 #include <cstring>
+#include <limits>
 #include <print>
 #include <string_view>
 
@@ -20,7 +21,8 @@ uint64_t read_tsc() {
 }
 
 int perf_event_open(perf_event_attr* attr, pid_t pid, int cpu, int group_fd, unsigned long flags) {
-    return syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
+    long res = syscall(__NR_perf_event_open, attr, pid, cpu, group_fd, flags);
+    return static_cast<int>(res);
 }
 
 struct PerfEventGroup {

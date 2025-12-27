@@ -11,6 +11,12 @@ struct PerfCounters {
     uint64_t l1d_misses = 0;
     uint64_t llc_accesses = 0;
     uint64_t llc_misses = 0;
+    uint64_t core_time_enabled = 0;
+    uint64_t core_time_running = 0;
+    uint64_t l1d_time_enabled = 0;
+    uint64_t l1d_time_running = 0;
+    uint64_t llc_time_enabled = 0;
+    uint64_t llc_time_running = 0;
 
     explicit PerfCounters() {}
     explicit PerfCounters(
@@ -40,18 +46,31 @@ struct PerfCounters {
         l1d_misses -= other.l1d_misses;
         llc_accesses -= other.llc_accesses;
         llc_misses -= other.llc_misses;
+        core_time_enabled -= other.core_time_enabled;
+        core_time_running -= other.core_time_running;
+        l1d_time_enabled -= other.l1d_time_enabled;
+        l1d_time_running -= other.l1d_time_running;
+        llc_time_enabled -= other.llc_time_enabled;
+        llc_time_running -= other.llc_time_running;
         return *this;
     }
     PerfCounters operator-(const PerfCounters& other) const {
-        return PerfCounters(
-            cycles - other.cycles,
-            branches - other.branches,
-            missed_branches - other.missed_branches,
-            instructions - other.instructions,
-            l1d_accesses - other.l1d_accesses,
-            l1d_misses - other.l1d_misses,
-            llc_accesses - other.llc_accesses,
-            llc_misses - other.llc_misses);
+        PerfCounters result{};
+        result.cycles = cycles - other.cycles;
+        result.branches = branches - other.branches;
+        result.missed_branches = missed_branches - other.missed_branches;
+        result.instructions = instructions - other.instructions;
+        result.l1d_accesses = l1d_accesses - other.l1d_accesses;
+        result.l1d_misses = l1d_misses - other.l1d_misses;
+        result.llc_accesses = llc_accesses - other.llc_accesses;
+        result.llc_misses = llc_misses - other.llc_misses;
+        result.core_time_enabled = core_time_enabled - other.core_time_enabled;
+        result.core_time_running = core_time_running - other.core_time_running;
+        result.l1d_time_enabled = l1d_time_enabled - other.l1d_time_enabled;
+        result.l1d_time_running = l1d_time_running - other.l1d_time_running;
+        result.llc_time_enabled = llc_time_enabled - other.llc_time_enabled;
+        result.llc_time_running = llc_time_running - other.llc_time_running;
+        return result;
     }
     PerfCounters& min(const PerfCounters& other) {
         cycles = other.cycles < cycles ? other.cycles : cycles;
@@ -63,6 +82,24 @@ struct PerfCounters {
         l1d_misses = other.l1d_misses < l1d_misses ? other.l1d_misses : l1d_misses;
         llc_accesses = other.llc_accesses < llc_accesses ? other.llc_accesses : llc_accesses;
         llc_misses = other.llc_misses < llc_misses ? other.llc_misses : llc_misses;
+        core_time_enabled =
+            other.core_time_enabled < core_time_enabled ? other.core_time_enabled
+                                                        : core_time_enabled;
+        core_time_running =
+            other.core_time_running < core_time_running ? other.core_time_running
+                                                        : core_time_running;
+        l1d_time_enabled =
+            other.l1d_time_enabled < l1d_time_enabled ? other.l1d_time_enabled
+                                                      : l1d_time_enabled;
+        l1d_time_running =
+            other.l1d_time_running < l1d_time_running ? other.l1d_time_running
+                                                      : l1d_time_running;
+        llc_time_enabled =
+            other.llc_time_enabled < llc_time_enabled ? other.llc_time_enabled
+                                                      : llc_time_enabled;
+        llc_time_running =
+            other.llc_time_running < llc_time_running ? other.llc_time_running
+                                                      : llc_time_running;
         return *this;
     }
     PerfCounters& operator+=(const PerfCounters& other) {
@@ -74,6 +111,12 @@ struct PerfCounters {
         l1d_misses += other.l1d_misses;
         llc_accesses += other.llc_accesses;
         llc_misses += other.llc_misses;
+        core_time_enabled += other.core_time_enabled;
+        core_time_running += other.core_time_running;
+        l1d_time_enabled += other.l1d_time_enabled;
+        l1d_time_running += other.l1d_time_running;
+        llc_time_enabled += other.llc_time_enabled;
+        llc_time_running += other.llc_time_running;
         return *this;
     }
 
@@ -87,6 +130,12 @@ struct PerfCounters {
         l1d_misses = static_cast<uint64_t>(static_cast<double>(l1d_misses) / d);
         llc_accesses = static_cast<uint64_t>(static_cast<double>(llc_accesses) / d);
         llc_misses = static_cast<uint64_t>(static_cast<double>(llc_misses) / d);
+        core_time_enabled = static_cast<uint64_t>(static_cast<double>(core_time_enabled) / d);
+        core_time_running = static_cast<uint64_t>(static_cast<double>(core_time_running) / d);
+        l1d_time_enabled = static_cast<uint64_t>(static_cast<double>(l1d_time_enabled) / d);
+        l1d_time_running = static_cast<uint64_t>(static_cast<double>(l1d_time_running) / d);
+        llc_time_enabled = static_cast<uint64_t>(static_cast<double>(llc_time_enabled) / d);
+        llc_time_running = static_cast<uint64_t>(static_cast<double>(llc_time_running) / d);
         return *this;
     }
 

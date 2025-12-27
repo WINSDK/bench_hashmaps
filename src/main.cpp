@@ -24,6 +24,7 @@ struct BenchSet {
     std::vector<BenchResult> boost;
     std::vector<BenchResult> twoway;
     std::vector<BenchResult> absl;
+    std::vector<BenchResult> fph;
     std::vector<BenchResult> std_map;
     std::vector<BenchResult> flat;
 };
@@ -82,6 +83,7 @@ BenchSet run_benchmarks(
         benchmark_boost(keys, lookup_sets, ITERS),
         benchmark_twoway(keys, lookup_sets, ITERS),
         benchmark_absl_flat_hash_map(keys, lookup_sets, ITERS),
+        benchmark_dynamic_fph_map(keys, lookup_sets, ITERS),
         benchmark_std_unordered_map(keys, lookup_sets, ITERS),
         benchmark_std_flat_map(keys, lookup_sets, ITERS),
     };
@@ -98,6 +100,7 @@ void sink_all(const BenchSet& set) {
     sink_results(set.boost);
     sink_results(set.twoway);
     sink_results(set.absl);
+    sink_results(set.fph);
     sink_results(set.std_map);
     sink_results(set.flat);
 }
@@ -117,15 +120,57 @@ std::string hit_rate_percent(uint64_t accesses, uint64_t misses) {
     if (accesses == 0) {
         return "na";
     }
+    if (misses >= accesses) {
+        return "0";
+    }
     return std::format("{}", 100 - (misses * 100 / accesses));
 }
 
+uint64_t scale_counter(uint64_t count, uint64_t time_enabled, uint64_t time_running) {
+    if (time_enabled == 0 || time_running == 0) {
+        return count;
+    }
+    if (time_enabled == time_running) {
+        return count;
+    }
+    const auto scaled = static_cast<__int128>(count) * time_enabled / time_running;
+    return static_cast<uint64_t>(scaled);
+}
+
 std::string format_cell(const BenchResult& result) {
-    const auto cycles_per_lookup = result.lookups == 0 ? 0 : result.counter.cycles / result.lookups;
-    const auto branch_hit =
-        hit_rate_percent(result.counter.branches, result.counter.missed_branches);
-    const auto l1d_hit = hit_rate_percent(result.counter.l1d_accesses, result.counter.l1d_misses);
-    const auto llc_hit = hit_rate_percent(result.counter.llc_accesses, result.counter.llc_misses);
+    const auto cycles = scale_counter(
+        result.counter.cycles,
+        result.counter.core_time_enabled,
+        result.counter.core_time_running);
+    const auto branches = scale_counter(
+        result.counter.branches,
+        result.counter.core_time_enabled,
+        result.counter.core_time_running);
+    const auto missed_branches = scale_counter(
+        result.counter.missed_branches,
+        result.counter.core_time_enabled,
+        result.counter.core_time_running);
+    const auto l1d_accesses = scale_counter(
+        result.counter.l1d_accesses,
+        result.counter.l1d_time_enabled,
+        result.counter.l1d_time_running);
+    const auto l1d_misses = scale_counter(
+        result.counter.l1d_misses,
+        result.counter.l1d_time_enabled,
+        result.counter.l1d_time_running);
+    const auto llc_accesses = scale_counter(
+        result.counter.llc_accesses,
+        result.counter.llc_time_enabled,
+        result.counter.llc_time_running);
+    const auto llc_misses = scale_counter(
+        result.counter.llc_misses,
+        result.counter.llc_time_enabled,
+        result.counter.llc_time_running);
+
+    const auto cycles_per_lookup = result.lookups == 0 ? 0 : cycles / result.lookups;
+    const auto branch_hit = hit_rate_percent(branches, missed_branches);
+    const auto l1d_hit = hit_rate_percent(l1d_accesses, l1d_misses);
+    const auto llc_hit = hit_rate_percent(llc_accesses, llc_misses);
     return std::format("{}/{}/{}/{}", cycles_per_lookup, branch_hit, l1d_hit, llc_hit);
 }
 
@@ -140,10 +185,11 @@ Table make_table(const BenchSet& set) {
         std::string_view name;
         const std::vector<BenchResult> BenchSet::* member;
     };
-    constexpr std::array<RowSpec, 5> kRows{{
+    constexpr std::array<RowSpec, 6> kRows{{
         {"boost", &BenchSet::boost},
         {"twoway", &BenchSet::twoway},
         {"absl", &BenchSet::absl},
+        {"fph", &BenchSet::fph},
         {"std", &BenchSet::std_map},
         {"flat", &BenchSet::flat},
     }};

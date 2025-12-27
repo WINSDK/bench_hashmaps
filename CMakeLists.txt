@@ -21,6 +21,7 @@ add_executable(hash
     src/bench.hpp
     src/TwoWay.hpp
     src/boost_unordered.hpp
+    src/dynamic_fph_table.hpp
     src/measure.hpp
 )
 

@@ -28,6 +28,7 @@
 
 #include "TwoWay.hpp"
 #include "boost_unordered.hpp"
+#include "dynamic_fph_table.hpp"
 #include "measure.hpp"
 
 struct BenchResult {
@@ -131,6 +132,36 @@ inline std::vector<BenchResult> benchmark_absl_flat_hash_map(
     std::span<const std::vector<uint64_t>> lookup_sets,
     size_t iters) {
     absl::flat_hash_map<uint64_t, uint64_t> map{};
+    map.reserve(keys.size() * 2);
+    for (const auto key : keys) {
+        map.emplace(key, key);
+    }
+
+    auto results = std::vector<BenchResult>{};
+    results.reserve(lookup_sets.size());
+
+    for (const auto& lookups : lookup_sets) {
+        const auto lookup_count = lookups.size();
+        const auto batch_size = lookup_count / iters;
+
+        auto [counter, sum] =
+            benchmark_batch(lookups, batch_size, iters, [&](uint64_t key, uint64_t*) {
+                const auto it = map.find(key);
+                assert(it != map.end());
+                return it->second;
+            });
+
+        results.emplace_back(counter, sum, lookups.size());
+    }
+
+    return results;
+}
+
+inline std::vector<BenchResult> benchmark_dynamic_fph_map(
+    std::span<const uint64_t> keys,
+    std::span<const std::vector<uint64_t>> lookup_sets,
+    size_t iters) {
+    fph::DynamicFphMap<uint64_t, uint64_t> map{};
     map.reserve(keys.size() * 2);
     for (const auto key : keys) {
         map.emplace(key, key);
